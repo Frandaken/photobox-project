@@ -1,20 +1,34 @@
 services:
   frontend:
     build:
-      context: ./frontend
+      context: https://github.com/Frandaken/photobox-project.git
+      dockerfile: frontend/Dockerfile
     container_name: photobox-frontend
     ports:
-      - "8088:80"
+      - "8095:80"
     restart: unless-stopped
     depends_on:
       - backend
 
   backend:
     build:
-      context: ./backend
+      context: https://github.com/Frandaken/photobox-project.git
+      dockerfile: backend/Dockerfile
     container_name: photobox-backend
     ports:
       - "3001:3001"
     env_file:
-      - ./backend/.env
+      - ./.env
     restart: unless-stopped
+
+# CATATAN:
+# - context di atas selalu meng-clone SELURUH repo (bukan hanya subfolder),
+#   makanya "dockerfile:" perlu path lengkap (frontend/Dockerfile,
+#   backend/Dockerfile), dan isi Dockerfile itu sendiri juga di-prefix
+#   "frontend/"/"backend/" saat COPY.
+#
+# - env_file "./backend.env" MERUJUK ke file di NAS (folder tempat
+#   docker-compose.yml ini disimpan oleh Dockge), BUKAN file di dalam
+#   repo GitHub. File ini sengaja tidak di-commit ke Git karena berisi
+#   kredensial asli (SMB & Nextcloud). Buat file ini manual sekali di NAS,
+#   isinya sama seperti format backend/.env.example di repo.
