@@ -1,12 +1,27 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { renderComposition } from "../utils/compositor.js";
 
 /**
  * SelectBest
  * User memilih foto dari hasil sesi (allPhotos), dibatasi tepat sejumlah
  * requiredShots. Urutan pemilihan menentukan urutan pengisian slot layout.
+ *
+ * Preview live: menampilkan bagaimana frame akan terlihat begitu foto
+ * dipilih, memakai compositor yang sama dengan tahap StickerOverlay/export
+ * akhir — slot yang belum terisi otomatis dibiarkan kosong (lihat
+ * renderComposition di compositor.js, yang men-skip slot tanpa foto).
  */
-export default function SelectBest({ allPhotos, requiredShots, onConfirm, onBack, onTakeMore }) {
+export default function SelectBest({
+  allPhotos,
+  requiredShots,
+  layout,
+  background,
+  onConfirm,
+  onBack,
+  onTakeMore,
+}) {
   const [selectedIndices, setSelectedIndices] = useState([]); // urutan = urutan slot
+  const previewCanvasRef = useRef(null);
 
   const toggle = (index) => {
     setSelectedIndices((prev) => {
@@ -19,6 +34,13 @@ export default function SelectBest({ allPhotos, requiredShots, onConfirm, onBack
   };
 
   const isDone = selectedIndices.length === requiredShots;
+
+  // Render ulang preview setiap kali pilihan foto berubah
+  useEffect(() => {
+    if (!previewCanvasRef.current || !layout) return;
+    const chosenSoFar = selectedIndices.map((i) => allPhotos[i]);
+    renderComposition(previewCanvasRef.current, layout, background, chosenSoFar);
+  }, [selectedIndices, allPhotos, layout, background]);
 
   const handleConfirm = () => {
     const chosenPhotos = selectedIndices.map((i) => allPhotos[i]);
@@ -39,6 +61,18 @@ export default function SelectBest({ allPhotos, requiredShots, onConfirm, onBack
           Frame kamu butuh <b>{requiredShots} foto</b>. Sudah dipilih:{" "}
           <b>{selectedIndices.length} / {requiredShots}</b>
         </div>
+
+        {layout && (
+          <div style={styles.previewWrap}>
+            <canvas
+              ref={previewCanvasRef}
+              style={{
+                ...styles.previewCanvas,
+                aspectRatio: `${layout.canvasWidth} / ${layout.canvasHeight}`,
+              }}
+            />
+          </div>
+        )}
 
         <div style={styles.grid}>
           {allPhotos.map((src, i) => {
@@ -133,6 +167,21 @@ const styles = {
     padding: "8px 10px",
     fontSize: 11,
     marginBottom: 12,
+  },
+  previewWrap: {
+    background: "#EDE7D9",
+    border: "2px solid #1E1A16",
+    borderRadius: 10,
+    padding: 10,
+    display: "flex",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  previewCanvas: {
+    width: "100%",
+    maxWidth: 220,
+    height: "auto",
+    borderRadius: 4,
   },
   grid: {
     display: "grid",

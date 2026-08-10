@@ -7,6 +7,8 @@ import SelectBest from "./components/SelectBest.jsx";
 import StickerOverlay from "./components/StickerOverlay.jsx";
 import DigitalCopy from "./components/DigitalCopy.jsx";
 import Done from "./components/Done.jsx";
+import AdminLockButton from "./components/AdminLockButton.jsx";
+import AdminPanel from "./components/AdminPanel.jsx";
 
 /**
  * App
@@ -16,8 +18,12 @@ import Done from "./components/Done.jsx";
  *      -> stickers -> digitalCopy -> done -> (kembali ke idle)
  *
  * Semua data sesi (layout terpilih, background terpilih, foto mentah,
- * foto pilihan, stiker) disimpan di state App ini dan diteruskan sebagai
- * props ke tiap layar, supaya satu sumber kebenaran (single source of truth).
+ * foto pilihan, stiker, hasil akhir) disimpan di state App ini dan
+ * diteruskan sebagai props ke tiap layar, supaya satu sumber kebenaran
+ * (single source of truth).
+ *
+ * Admin Panel ditumpuk di atas semua layar (overlay gembok pojok kanan
+ * atas, selalu terlihat) dan tidak terikat pada state machine screen di atas.
  */
 export default function App() {
   const [screen, setScreen] = useState("idle");
@@ -27,6 +33,9 @@ export default function App() {
   const [rawPhotos, setRawPhotos] = useState([]); // semua hasil jepretan sesi
   const [chosenPhotos, setChosenPhotos] = useState([]); // subset yang dipilih, sejumlah slot layout
   const [placedStickers, setPlacedStickers] = useState([]);
+  const [finalDataUrl, setFinalDataUrl] = useState(null); // hasil akhir untuk print
+
+  const [adminToken, setAdminToken] = useState(null); // null = admin panel tertutup
 
   const resetSession = () => {
     setSelectedLayout(null);
@@ -34,98 +43,122 @@ export default function App() {
     setRawPhotos([]);
     setChosenPhotos([]);
     setPlacedStickers([]);
+    setFinalDataUrl(null);
     setScreen("idle");
   };
 
   const handlePrint = () => {
-    // Print browser bawaan sebagai titik awal; bisa diganti integrasi
-    // printer foto/thermal khusus nanti.
     window.print();
   };
 
-  switch (screen) {
-    case "idle":
-      return <IdleScreen onStart={() => setScreen("layout")} />;
+  const renderScreen = () => {
+    switch (screen) {
+      case "idle":
+        return <IdleScreen onStart={() => setScreen("layout")} />;
 
-    case "layout":
-      return (
-        <LayoutPicker
-          onSelect={(layout) => {
-            setSelectedLayout(layout);
-            setScreen("background");
-          }}
-          onBack={() => setScreen("idle")}
-        />
-      );
+      case "layout":
+        return (
+          <LayoutPicker
+            onSelect={(layout) => {
+              setSelectedLayout(layout);
+              setScreen("background");
+            }}
+            onBack={() => setScreen("idle")}
+          />
+        );
 
-    case "background":
-      return (
-        <BackgroundPicker
-          onSelect={(bg) => {
-            setSelectedBackground(bg);
-            setScreen("session");
-          }}
-          onBack={() => setScreen("layout")}
-        />
-      );
+      case "background":
+        return (
+          <BackgroundPicker
+            onSelect={(bg) => {
+              setSelectedBackground(bg);
+              setScreen("session");
+            }}
+            onBack={() => setScreen("layout")}
+          />
+        );
 
-    case "session":
-      return (
-        <PhotoSession
-          requiredShots={selectedLayout?.requiredShots ?? 1}
-          onFinish={(photos) => {
-            setRawPhotos(photos);
-            setScreen("selectBest");
-          }}
-          onBack={() => setScreen("background")}
-        />
-      );
+      case "session":
+        return (
+          <PhotoSession
+            requiredShots={selectedLayout?.requiredShots ?? 1}
+            onFinish={(photos) => {
+              setRawPhotos(photos);
+              setScreen("selectBest");
+            }}
+            onBack={() => setScreen("background")}
+          />
+        );
 
-    case "selectBest":
-      return (
-        <SelectBest
-          allPhotos={rawPhotos}
-          requiredShots={selectedLayout?.requiredShots ?? 1}
-          onConfirm={(photos) => {
-            setChosenPhotos(photos);
-            setScreen("stickers");
-          }}
-          onTakeMore={() => setScreen("session")}
-          onBack={() => setScreen("session")}
-        />
-      );
+      case "selectBest":
+        return (
+          <SelectBest
+            allPhotos={rawPhotos}
+            requiredShots={selectedLayout?.requiredShots ?? 1}
+            layout={selectedLayout}
+            background={selectedBackground}
+            onConfirm={(photos) => {
+              setChosenPhotos(photos);
+              setScreen("stickers");
+            }}
+            onTakeMore={() => setScreen("session")}
+            onBack={() => setScreen("session")}
+          />
+        );
 
-    case "stickers":
-      return (
-        <StickerOverlay
-          layout={selectedLayout}
-          background={selectedBackground}
-          photos={chosenPhotos}
-          onConfirm={(stickers) => {
-            setPlacedStickers(stickers);
-            setScreen("digitalCopy");
-          }}
-          onBack={() => setScreen("selectBest")}
-        />
-      );
+      case "stickers":
+        return (
+          <StickerOverlay
+            layout={selectedLayout}
+            background={selectedBackground}
+            photos={chosenPhotos}
+            onConfirm={(stickers) => {
+              setPlacedStickers(stickers);
+              setScreen("digitalCopy");
+            }}
+            onBack={() => setScreen("selectBest")}
+          />
+        );
 
-    case "digitalCopy":
-      return (
-        <DigitalCopy
-          layout={selectedLayout}
-          background={selectedBackground}
-          chosenPhotos={chosenPhotos}
-          stickers={placedStickers}
-          allOriginalPhotos={rawPhotos}
-          onDone={() => setScreen("done")}
-          onBack={() => setScreen("stickers")}
-        />
-      );
+      case "digitalCopy":
+        return (
+          <DigitalCopy
+            layout={selectedLayout}
+            background={selectedBackground}
+            chosenPhotos={chosenPhotos}
+            stickers={placedStickers}
+            allOriginalPhotos={rawPhotos}
+            onDone={(dataUrl) => {
+              setFinalDataUrl(dataUrl);
+              setScreen("done");
+            }}
+            onBack={() => setScreen("stickers")}
+          />
+        );
 
-    case "done":
-      return <Done onPrint={handlePrint} onFinish={resetSession} />;
+      case "done":
+        return (
+          <Done
+            finalDataUrl={finalDataUrl}
+            onPrint={handlePrint}
+            onFinish={resetSession}
+          />
+        );
 
-    default:
-      return null;
-  }
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <>
+      {renderScreen()}
+
+      {adminToken ? (
+        <AdminPanel token={adminToken} onClose={() => setAdminToken(null)} />
+      ) : (
+        <AdminLockButton onUnlock={setAdminToken} />
+      )}
+    </>
+  );
 }

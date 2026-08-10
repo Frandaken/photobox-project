@@ -4,9 +4,8 @@ import { renderComposition, drawStickers, canvasToDataUrl } from "../utils/compo
 /**
  * DigitalCopy
  * Merender hasil akhir (composite + stiker), lalu mencoba upload ke backend
- * (yang akan simpan ke NAS via SMB + generate share link Nextcloud).
- * Failsafe: kalau upload gagal, foto tetap tersedia untuk diunduh langsung
- * dari browser (tanpa link QR).
+ * (yang akan simpan ke NAS via SMB). Failsafe: kalau upload gagal, foto tetap
+ * tersedia untuk diunduh langsung dari browser.
  *
  * Yang diunggah/diunduh: 1 file gabungan (frame+foto+stiker) DAN semua foto
  * original hasil sesi, sesuai permintaan "foto strip semua dan semua foto original".
@@ -18,7 +17,6 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
   const canvasRef = useRef(null);
   const [finalDataUrl, setFinalDataUrl] = useState(null);
   const [status, setStatus] = useState("rendering"); // rendering | uploading | success | failed
-  const [shareUrl, setShareUrl] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
   // 1. Render komposisi akhir (background+foto+stiker) sekali di awal
@@ -41,7 +39,7 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2. Setelah render selesai, coba upload ke backend
+  // 2. Setelah render selesai, coba upload ke backend (simpan ke NAS via SMB)
   useEffect(() => {
     if (status !== "uploading" || !finalDataUrl) return;
 
@@ -60,15 +58,13 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
         if (!res.ok) throw new Error(`Server merespons status ${res.status}`);
 
         const data = await res.json();
-        // Diharapkan backend mengembalikan { shareUrl: "https://nextcloud.../s/xxxx" }
-        if (!data?.shareUrl) throw new Error("Respons server tidak berisi shareUrl");
+        if (!data?.saved) throw new Error("Respons server tidak sesuai");
 
         if (!cancelled) {
-          setShareUrl(data.shareUrl);
           setStatus("success");
         }
       } catch (err) {
-        console.warn("Upload ke NAS/Nextcloud gagal, failsafe ke unduh lokal:", err);
+        console.warn("Upload ke NAS gagal, failsafe ke unduh lokal:", err);
         if (!cancelled) {
           setErrorMsg(err.message);
           setStatus("failed");
@@ -113,30 +109,25 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
 
         {status === "uploading" && (
           <div style={styles.statusBox}>
-            <span style={styles.spinner} /> Mengunggah ke penyimpanan…
+            <span style={styles.spinner} /> Menyimpan ke penyimpanan NAS…
           </div>
         )}
 
-        {status === "success" && shareUrl && (
+        {status === "success" && (
           <div style={styles.successBox}>
             <p style={styles.successText}>
-              ✓ Tersimpan! Pindai kode QR di bawah untuk mengunduh dari HP-mu.
+              ✓ Tersimpan ke penyimpanan NAS. Kamu juga bisa mengunduh salinannya di sini.
             </p>
-            <div style={styles.qrWrap}>
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(shareUrl)}`}
-                alt="QR Code unduhan"
-                style={styles.qrImg}
-              />
-            </div>
-            <p style={styles.linkText}>{shareUrl}</p>
+            <button style={styles.btnSecondary} onClick={handleDownloadLocal}>
+              ⬇ Unduh ke perangkat ini
+            </button>
           </div>
         )}
 
         {status === "failed" && (
           <div style={styles.failedBox}>
             <p style={styles.failedText}>
-              ⚠ Tidak bisa mengunggah ke penyimpanan jaringan saat ini
+              ⚠ Tidak bisa menyimpan ke penyimpanan NAS saat ini
               {errorMsg ? ` (${errorMsg})` : ""}. Kamu tetap bisa mengunduh
               hasilnya langsung ke perangkat ini.
             </p>
@@ -153,7 +144,7 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
               ...(finalDataUrl ? {} : styles.btnDisabled),
             }}
             disabled={!finalDataUrl}
-            onClick={onDone}
+            onClick={() => onDone(finalDataUrl)}
           >
             Lanjut ke Cetak
           </button>
@@ -257,20 +248,6 @@ const styles = {
   successText: {
     fontSize: 12,
     marginBottom: 10,
-  },
-  qrWrap: {
-    display: "flex",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  qrImg: {
-    width: 160,
-    height: 160,
-  },
-  linkText: {
-    fontSize: 9,
-    color: "#8A8073",
-    wordBreak: "break-all",
   },
   failedBox: {
     background: "#FFF3EE",

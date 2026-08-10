@@ -1,7 +1,17 @@
-import React from "react";
-import { BACKGROUNDS } from "../data/backgrounds.js";
+import React, { useEffect, useState } from "react";
 
 export default function BackgroundPicker({ onSelect, onBack }) {
+  const [backgrounds, setBackgrounds] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/backgrounds")
+      .then((res) => res.json())
+      .then((data) => setBackgrounds(data))
+      .catch(() => setBackgrounds([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div style={styles.wrap}>
       <div style={styles.topbar}>
@@ -16,8 +26,10 @@ export default function BackgroundPicker({ onSelect, onBack }) {
           Warna dan corak dasar yang jadi latar hasil fotomu.
         </p>
 
+        {loading && <p style={styles.desc}>Memuat pilihan background…</p>}
+
         <div style={styles.grid}>
-          {BACKGROUNDS.map((bg) => (
+          {backgrounds.map((bg) => (
             <button
               key={bg.id}
               style={styles.card}

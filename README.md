@@ -4,29 +4,46 @@ Aplikasi photobox self-hosted:
 
 ```
 Idle -> Pilih Layout -> Pilih Background -> Sesi Foto -> Pilih Foto Terbaik
-     -> Overlay Stiker -> Digital Copy (QR/link) -> Done (Print)
+     -> Overlay Stiker -> Digital Copy (simpan ke NAS) -> Done (Print)
 ```
+
+Admin Panel (gembok pojok kanan atas, dikunci PIN) tersedia di semua layar
+untuk mengelola Layout & Background, dan melihat status koneksi NAS.
 
 ## Struktur proyek
 
 ```
 frontend/           -> React + Vite, semua UI/alur, di-build jadi statis & di-serve nginx
   src/
-    App.jsx          -> state machine alur lengkap
+    App.jsx          -> state machine alur lengkap + overlay Admin Panel
     components/       -> satu file per layar
-    data/             -> data contoh Layout, Background, Stiker (JSON-like)
+      AdminLockButton.jsx -> ikon gembok + modal PIN
+      AdminPanel.jsx      -> kelola Layout/Background + status NAS
+    data/
+      stickers.js       -> data stiker (masih hardcode; Layout & Background
+                           sekarang diambil dari backend, bukan hardcode lagi)
     utils/
       compositor.js   -> gabung layout+background+foto+stiker jadi 1 gambar (canvas)
-backend/             -> Node/Express, jembatan upload ke SMB (NAS) + share link Nextcloud
-  server.js           -> endpoint POST /api/upload
-  smbUpload.js        -> logic upload ke share SMB
-  nextcloud.js        -> logic upload + share link Nextcloud (WebDAV + OCS API)
-docker-compose.yml    -> 2 service: frontend (port 8088) + backend (port 3001)
+backend/             -> Node/Express
+  server.js           -> semua endpoint (publik + admin)
+  smbUpload.js        -> upload ke NAS via SMB + cek koneksi
+  dataStore.js        -> penyimpanan Layout & Background (file JSON di /app/data)
+  adminAuth.js        -> verifikasi PIN + token sesi admin
+docker-compose.yml    -> 2 service: frontend (port 8095) + backend (port 3001)
 ```
 
 ## Menjalankan di laptop (development)
 
 Butuh [Node.js](https://nodejs.org) versi 20+.
+
+**Backend** (jalankan dulu, karena frontend butuh API-nya):
+```bash
+cd backend
+cp .env.example .env
+# edit .env: isi kredensial SMB, ADMIN_PIN, dll
+npm install
+npm start
+```
 
 **Frontend:**
 ```bash
@@ -35,68 +52,68 @@ npm install
 npm run dev
 ```
 Buka `http://localhost:5173`. Kamera (`getUserMedia`) otomatis diizinkan browser
-di `localhost`, tidak perlu HTTPS untuk testing lokal.
+di `localhost`.
 
-**Backend** (opsional untuk testing awal UI — DigitalCopy screen akan otomatis
-fallback ke "unduh lokal" kalau backend tidak jalan/gagal):
-```bash
-cd backend
-cp .env.example .env
-# lalu edit .env, isi kredensial SMB & Nextcloud yang sebenarnya
-npm install
-npm start
-```
+## Deploy ke NAS lewat Dockge
 
-## Deploy ke NAS lewat Dockge (tanpa perlu CLI)
-
-1. Push seluruh isi folder ini ke repo GitHub.
-2. **Penting:** buat file `backend/.env` (dari `.env.example`) dengan kredensial
-   asli SMB & Nextcloud kamu. **Jangan commit file `.env` ini ke GitHub** —
-   sudah ada di `.gitignore`. Kamu perlu cara lain untuk menaruh file ini di
-   NAS, misalnya upload manual lewat File Station ke folder tempat compose
-   akan dijalankan, sebelum deploy stack di Dockge.
-3. Di Dockge, buat stack baru, paste isi `docker-compose.yml`. Sesuaikan path
-   `context` di tiap service jika struktur foldermu di NAS berbeda.
-4. Deploy. Docker build kedua image (frontend jadi nginx statis, backend jadi
-   Node server), lalu jalan otomatis.
-5. Akses lewat `http://IP-NAS-KAMU:8088`.
+1. Push isi folder ini ke repo GitHub (public, supaya build context Git URL
+   di Dockge bisa clone tanpa autentikasi).
+2. Di folder stack Dockge di NAS (sejajar dengan `docker-compose.yml`), buat
+   2 hal secara manual (tidak lewat GitHub):
+   - File **`.env`** — isi sesuai `backend/.env.example`, dengan kredensial
+     SMB asli dan `ADMIN_PIN` pilihanmu.
+   - Folder **`data/`** akan dibuat otomatis oleh Docker saat pertama jalan
+     (untuk menyimpan Layout & Background yang diedit lewat Admin Panel).
+3. Paste isi `docker-compose.yml` ke Dockge, deploy.
+4. Akses lewat `http://IP-NAS-KAMU:8095`.
 
 ### Penting soal HTTPS untuk kamera
 
 Browser hanya mengizinkan `getUserMedia` (akses kamera) lewat HTTPS atau
-`localhost`. Untuk kios yang diakses lewat IP lokal (`http://192.168.x.x:8095`),
-kamera akan gagal. Solusi:
-- Reverse proxy (Nginx Proxy Manager / Caddy) dengan sertifikat di depan
-  container frontend.
-- Cloudflare Tunnel untuk expose dengan HTTPS otomatis.
-- Akses langsung dari device kios lewat alamat yang menghasilkan HTTPS/localhost.
+`localhost`. Untuk kios yang diakses lewat IP lokal, kamera akan gagal.
+Solusi: reverse proxy dengan sertifikat, atau Cloudflare Tunnel.
 
-### Konfigurasi SMB & Nextcloud (backend/.env)
+### Konfigurasi SMB (backend/.env)
 
-Lihat `backend/.env.example` untuk daftar variabel lengkap. Poin penting:
-- **SMB**: butuh binary `smbclient` di sisi backend — sudah otomatis
-  ter-install lewat `backend/Dockerfile` (`apk add samba-client`).
-- **Nextcloud**: gunakan **App Password** (Nextcloud > Settings > Security >
-  Devices & sessions > Create new app password), bukan password akun utama.
+Lihat `backend/.env.example` untuk daftar variabel lengkap:
+- `SMB_ADDRESS` — alamat share utama (mis. `//192.168.1.10/photobox-share`)
+- `SMB_UPLOAD_DIR` — subfolder DI DALAM share itu tempat hasil foto disimpan
+  (dibuat otomatis kalau belum ada; kosongkan untuk simpan di root share)
+- `ADMIN_PIN` — PIN untuk membuka Admin Panel. **Wajib diisi** — kalau
+  kosong, Admin Panel akan menolak semua akses (fail-safe: lebih baik
+  terkunci daripada terbuka tanpa sengaja).
 
-### Alur failsafe penyimpanan
+### Alur penyimpanan (SMB saja, tanpa Nextcloud)
 
-1. Backend coba simpan file (hasil akhir + semua foto original) ke NAS via SMB
-   sebagai arsip. Kalau ini gagal, proses tetap lanjut ke langkah 2 (arsip
-   bukan syarat mutlak berhasilnya share link).
-2. Backend upload file hasil akhir ke Nextcloud, lalu generate share link
-   publik — ini yang ditampilkan sebagai QR code di layar Digital Copy.
-3. Kalau langkah 2 juga gagal (NAS/Nextcloud tidak bisa diakses dari mana pun),
-   frontend otomatis menampilkan tombol "Unduh ke perangkat ini" sebagai
-   failsafe terakhir — user tetap bisa membawa pulang hasilnya lewat unduhan
-   langsung di kios, tanpa perlu QR/link.
+Setelah stiker ditempel, hasil akhir (1 file gabungan) dan semua foto
+original dikirim ke backend, yang menyimpannya langsung ke NAS lewat SMB.
+Kalau upload SMB gagal (NAS mati, kredensial salah, dll), frontend otomatis
+menampilkan tombol "Unduh ke perangkat ini" sebagai failsafe — user tetap
+bisa membawa pulang hasilnya lewat unduhan langsung di kios.
 
-## Komponen yang masih perlu dikembangkan
+### Print
 
-- **Admin Panel**: upload Layout/Background baru + editor drag-drop untuk
-  menata slot foto (saat ini data Layout/Background masih hardcode di
-  `frontend/src/data/`).
-- **Integrasi printer** fisik (saat ini `Done.jsx` memakai `window.print()`
-  bawaan browser sebagai titik awal).
-- Background saat ini masih warna solid placeholder — perlu diganti gambar
-  PNG yang diupload admin (lihat komentar `TODO` di `compositor.js`).
+Layar "Done" menampilkan tombol cetak yang memanggil `window.print()`,
+tapi HANYA gambar hasil akhir yang tercetak (bukan seluruh halaman) —
+dicapai lewat CSS `@media print` di `index.css` yang menyembunyikan semua
+elemen UI dan hanya menampilkan `<img>` hasil akhir saat proses print.
+
+## Admin Panel
+
+Diakses lewat ikon gembok 🔒 di pojok kanan atas (muncul di semua layar).
+Setelah PIN benar, admin bisa:
+- Melihat status koneksi NAS (SMB) real-time
+- Menambah/mengedit/menghapus **Layout** (nama, ukuran kertas, ukuran
+  kanvas, dan posisi/ukuran tiap slot foto lewat input angka)
+- Menambah/mengedit/menghapus **Background** (nama + warna)
+
+Perubahan tersimpan langsung ke `backend/data/*.json` (di-mount sebagai
+volume Docker) dan langsung terlihat di kios tanpa perlu rebuild frontend.
+
+## Yang masih belum dikembangkan
+
+- Editor Layout masih berbasis form angka (x/y/width/height per slot),
+  belum drag-drop visual.
+- Background masih warna solid, belum gambar PNG yang bisa diupload admin.
+- Integrasi printer fisik khusus (foto/thermal) — saat ini pakai print
+  dialog bawaan browser.

@@ -19,6 +19,8 @@ services:
       - "3001:3001"
     env_file:
       - ./.env
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
 
 # CATATAN:
@@ -27,8 +29,13 @@ services:
 #   backend/Dockerfile), dan isi Dockerfile itu sendiri juga di-prefix
 #   "frontend/"/"backend/" saat COPY.
 #
-# - env_file "./backend.env" MERUJUK ke file di NAS (folder tempat
+# - env_file "./.env" MERUJUK ke file di NAS (folder tempat
 #   docker-compose.yml ini disimpan oleh Dockge), BUKAN file di dalam
 #   repo GitHub. File ini sengaja tidak di-commit ke Git karena berisi
-#   kredensial asli (SMB & Nextcloud). Buat file ini manual sekali di NAS,
-#   isinya sama seperti format backend/.env.example di repo.
+#   kredensial asli (SMB) dan PIN admin. Buat file ini manual sekali
+#   di NAS, isinya sama seperti format backend/.env.example di repo.
+#
+# - volume "./data:/app/data" menyimpan data Layout & Background yang
+#   diedit lewat Admin Panel, supaya perubahan admin tetap ada meski
+#   container backend di-rebuild/redeploy. Folder "./data" akan otomatis
+#   dibuat oleh Docker di NAS, sejajar dengan docker-compose.yml ini.

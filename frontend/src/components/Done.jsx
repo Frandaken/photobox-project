@@ -1,22 +1,37 @@
 import React from "react";
 
-export default function Done({ onPrint, onFinish }) {
+/**
+ * Done
+ * Halaman konfirmasi akhir + opsi cetak.
+ *
+ * Print hanya menampilkan gambar hasil akhir (bukan seluruh halaman ini),
+ * dicapai dengan elemen <img> tersembunyi yang HANYA muncul lewat
+ * @media print (lihat index.css untuk aturan print-area/no-print).
+ */
+export default function Done({ finalDataUrl, onPrint, onFinish }) {
   return (
-    <div style={styles.wrap}>
-      <div style={styles.check}>✓</div>
-      <h2 style={styles.title}>Hasil tersimpan!</h2>
-      <p style={styles.desc}>
-        Terima kasih sudah berfoto 🎉<br />
-        Ingin mencetak hasilnya sekarang?
-      </p>
+    <>
+      <div style={styles.wrap} className="no-print">
+        <div style={styles.check}>✓</div>
+        <h2 style={styles.title}>Hasil tersimpan!</h2>
+        <p style={styles.desc}>
+          Terima kasih sudah berfoto 🎉<br />
+          Ingin mencetak hasilnya sekarang?
+        </p>
 
-      <button style={styles.btnPrimary} onClick={onPrint}>
-        🖨 Cetak Sekarang
-      </button>
-      <button style={styles.btnSecondary} onClick={onFinish}>
-        Selesai — Kembali ke Awal
-      </button>
-    </div>
+        <button style={styles.btnPrimary} onClick={onPrint} disabled={!finalDataUrl}>
+          🖨 Cetak Sekarang
+        </button>
+        <button style={styles.btnSecondary} onClick={onFinish}>
+          Selesai — Kembali ke Awal
+        </button>
+      </div>
+
+      {/* Hanya dirender ke kertas saat print (disembunyikan di layar biasa) */}
+      {finalDataUrl && (
+        <img src={finalDataUrl} alt="Hasil cetak" className="print-area" />
+      )}
+    </>
   );
 }
 

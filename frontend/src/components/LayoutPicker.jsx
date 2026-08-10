@@ -1,7 +1,17 @@
-import React from "react";
-import { LAYOUTS } from "../data/layouts.js";
+import React, { useEffect, useState } from "react";
 
 export default function LayoutPicker({ onSelect, onBack }) {
+  const [layouts, setLayouts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/layouts")
+      .then((res) => res.json())
+      .then((data) => setLayouts(data))
+      .catch(() => setLayouts([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div style={styles.wrap}>
       <div style={styles.topbar}>
@@ -16,8 +26,10 @@ export default function LayoutPicker({ onSelect, onBack }) {
           Tentukan jumlah dan susunan foto dalam hasil akhirmu.
         </p>
 
+        {loading && <p style={styles.desc}>Memuat pilihan layout…</p>}
+
         <div style={styles.grid}>
-          {LAYOUTS.map((layout) => (
+          {layouts.map((layout) => (
             <button
               key={layout.id}
               style={styles.card}
