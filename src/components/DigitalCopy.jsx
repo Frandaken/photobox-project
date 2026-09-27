@@ -3,30 +3,35 @@ import { renderComposition, drawStickers, canvasToDataUrl } from "../utils/compo
 
 /**
  * DigitalCopy
- * Merender hasil akhir (composite + stiker), lalu mencoba upload ke backend
- * (yang akan simpan ke NAS via SMB). Failsafe: kalau upload gagal, foto tetap
- * tersedia untuk diunduh langsung dari browser.
- *
- * Yang diunggah/diunduh: 1 file gabungan (frame+foto+stiker) DAN semua foto
- * original hasil sesi, sesuai permintaan "foto strip semua dan semua foto original".
+ * Merender hasil akhir beresolusi penuh (komposisi frame + background + foto + stiker),
+ * mengunggah otomatis ke penyimpanan (SMB NAS / Nextcloud / Disk lokal),
+ * dan menyediakan tombol unduh langsung ke perangkat pengguna.
  */
+const UPLOAD_ENDPOINT = "/api/upload";
 
-const UPLOAD_ENDPOINT = "/api/upload"; // disediakan backend Node/Express di NAS
-
-export default function DigitalCopy({ layout, background, chosenPhotos, stickers, allOriginalPhotos, onDone, onBack }) {
+export default function DigitalCopy({
+  layout,
+  background,
+  chosenPhotos,
+  stickers,
+  allOriginalPhotos,
+  onDone,
+  onBack,
+}) {
   const canvasRef = useRef(null);
   const [finalDataUrl, setFinalDataUrl] = useState(null);
   const [status, setStatus] = useState("rendering"); // rendering | uploading | success | failed
+  const [storageResult, setStorageResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // 1. Render komposisi akhir (background+foto+stiker) sekali di awal
+  // 1. Render komposisi akhir
   useEffect(() => {
     let cancelled = false;
     async function run() {
       const canvas = canvasRef.current;
       await renderComposition(canvas, layout, background, chosenPhotos);
       await drawStickers(canvas, stickers);
-      const dataUrl = canvasToDataUrl(canvas);
+      const dataUrl = canvasToDataUrl(canvas, 0.95);
       if (!cancelled) {
         setFinalDataUrl(dataUrl);
         setStatus("uploading");
@@ -36,10 +41,9 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [layout, background, chosenPhotos, stickers]);
 
-  // 2. Setelah render selesai, coba upload ke backend (simpan ke NAS via SMB)
+  // 2. Upload otomatis ke backend (NAS SMB / Nextcloud / Fail-safe Lokal)
   useEffect(() => {
     if (status !== "uploading" || !finalDataUrl) return;
 
@@ -55,16 +59,17 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
           }),
         });
 
-        if (!res.ok) throw new Error(`Server merespons status ${res.status}`);
+        if (!res.ok) throw new Error(`Server status ${res.status}`);
 
         const data = await res.json();
-        if (!data?.saved) throw new Error("Respons server tidak sesuai");
+        if (!data?.saved) throw new Error("Respons server tidak valid");
 
         if (!cancelled) {
+          setStorageResult(data.storage);
           setStatus("success");
         }
       } catch (err) {
-        console.warn("Upload ke NAS gagal, failsafe ke unduh lokal:", err);
+        console.warn("Upload gagal, fallback ke unduh lokal:", err);
         if (!cancelled) {
           setErrorMsg(err.message);
           setStatus("failed");
@@ -78,62 +83,116 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
     };
   }, [status, finalDataUrl, allOriginalPhotos]);
 
-  const handleDownloadLocal = () => {
+  const handleDownloadFinal = () => {
     if (!finalDataUrl) return;
     const a = document.createElement("a");
     a.href = finalDataUrl;
-    a.download = `photobox-${Date.now()}.jpg`;
+    a.download = `photobox-${Date.now()}-frame.jpg`;
     a.click();
   };
 
+  const handleDownloadOriginals = () => {
+    (allOriginalPhotos || []).forEach((photo, idx) => {
+      const a = document.createElement("a");
+      a.href = photo;
+      a.download = `photobox-original-${idx + 1}.jpg`;
+      a.click();
+    });
+  };
+
   return (
-    <div style={styles.wrap}>
+    <div style={styles.wrap} className="screen-fade">
       <div style={styles.topbar}>
-        <button style={styles.backBtn} onClick={onBack}>‹ Kembali</button>
-        <span style={styles.stepLabel}>Digital Copy</span>
+        <button style={styles.backBtn} onClick={onBack} className="btn-interactive">
+          ‹ Kembali
+        </button>
+        <span style={styles.stepLabel}>Salinan Digital</span>
         <span style={{ width: 60 }} />
       </div>
 
       <div style={styles.content}>
-        <h2 style={styles.title}>Hasil akhir kamu</h2>
+        <h2 style={styles.title}>Hasil Frame Kamu</h2>
 
         <canvas ref={canvasRef} style={{ display: "none" }} />
 
         <div style={styles.previewWrap}>
           {finalDataUrl ? (
-            <img src={finalDataUrl} alt="Hasil akhir" style={styles.previewImg} />
+            <img
+              src={finalDataUrl}
+              alt="Hasil akhir photobox"
+              style={styles.previewImg}
+            />
           ) : (
-            <div style={styles.previewLoading}>Menyusun hasil akhir…</div>
+            <div style={styles.previewLoading}>Menyusun hasil frame foto…</div>
           )}
         </div>
 
+        {/* Status Uploading */}
         {status === "uploading" && (
           <div style={styles.statusBox}>
-            <span style={styles.spinner} /> Menyimpan ke penyimpanan NAS…
+            <span style={styles.spinner} /> Menyimpan ke penyimpanan server/NAS…
           </div>
         )}
 
+        {/* Status Berhasil */}
         {status === "success" && (
           <div style={styles.successBox}>
             <p style={styles.successText}>
-              ✓ Tersimpan ke penyimpanan NAS. Kamu juga bisa mengunduh salinannya di sini.
+              ✓ <b>Tersimpan aman!</b>{" "}
+              {storageResult?.smb
+                ? "Tersimpan ke NAS (SMB) & Penyimpanan Server."
+                : storageResult?.nextcloud
+                ? "Tersimpan ke Nextcloud & Penyimpanan Server."
+                : "Tersimpan ke penyimpanan server (folder data)."}
             </p>
-            <button style={styles.btnSecondary} onClick={handleDownloadLocal}>
-              ⬇ Unduh ke perangkat ini
-            </button>
+            <div style={styles.downloadRow}>
+              <button
+                style={styles.btnSecondary}
+                onClick={handleDownloadFinal}
+                className="btn-interactive"
+              >
+                ⬇ Unduh Hasil Frame
+              </button>
+              {allOriginalPhotos?.length > 0 && (
+                <button
+                  style={styles.btnOutline}
+                  onClick={handleDownloadOriginals}
+                  title="Unduh semua foto jepretan asli tanpa frame"
+                  className="btn-interactive"
+                >
+                  ⬇ Unduh {allOriginalPhotos.length} Foto Asli
+                </button>
+              )}
+            </div>
           </div>
         )}
 
+        {/* Status Gagal / Offline */}
         {status === "failed" && (
           <div style={styles.failedBox}>
             <p style={styles.failedText}>
-              ⚠ Tidak bisa menyimpan ke penyimpanan NAS saat ini
-              {errorMsg ? ` (${errorMsg})` : ""}. Kamu tetap bisa mengunduh
-              hasilnya langsung ke perangkat ini.
+              ⚠ Tidak dapat menyinkronkan ke NAS saat ini
+              {errorMsg ? ` (${errorMsg})` : ""}. Kamu tetap dapat langsung
+              mengunduh hasil fotomu ke perangkat ini:
             </p>
-            <button style={styles.btnSecondary} onClick={handleDownloadLocal}>
-              ⬇ Unduh ke perangkat ini
-            </button>
+            <div style={styles.downloadRow}>
+              <button
+                style={styles.btnSecondary}
+                onClick={handleDownloadFinal}
+                className="btn-interactive"
+              >
+                ⬇ Unduh Hasil Frame ke HP / Komputer
+              </button>
+              {allOriginalPhotos?.length > 0 && (
+                <button
+                  style={styles.btnOutline}
+                  onClick={handleDownloadOriginals}
+                  className="btn-interactive"
+                >
+                  ⬇ Unduh {allOriginalPhotos.length} Foto Asli
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -145,8 +204,9 @@ export default function DigitalCopy({ layout, background, chosenPhotos, stickers
             }}
             disabled={!finalDataUrl}
             onClick={() => onDone(finalDataUrl)}
+            className="btn-interactive"
           >
-            Lanjut ke Cetak
+            Lanjut ke Cetak / Print 🖨
           </button>
         </div>
       </div>
@@ -212,8 +272,9 @@ const styles = {
   },
   previewImg: {
     maxWidth: "100%",
-    maxHeight: 320,
+    maxHeight: 360,
     borderRadius: 4,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
   },
   previewLoading: {
     fontSize: 11,
@@ -229,8 +290,8 @@ const styles = {
     marginBottom: 12,
   },
   spinner: {
-    width: 12,
-    height: 12,
+    width: 14,
+    height: 14,
     border: "2px solid #D9D2C2",
     borderTopColor: "#D8482E",
     borderRadius: "50%",
@@ -243,11 +304,11 @@ const styles = {
     borderRadius: 10,
     padding: 14,
     marginBottom: 12,
-    textAlign: "center",
   },
   successText: {
-    fontSize: 12,
-    marginBottom: 10,
+    fontSize: 11,
+    margin: "0 0 10px",
+    lineHeight: 1.5,
   },
   failedBox: {
     background: "#FFF3EE",
@@ -261,19 +322,37 @@ const styles = {
     marginBottom: 10,
     lineHeight: 1.5,
   },
+  downloadRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
   btnSecondary: {
+    display: "block",
+    width: "100%",
+    background: "#1E1A16",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    padding: 10,
+    fontFamily: "inherit",
+    fontWeight: "bold",
+    fontSize: 11,
+    textTransform: "uppercase",
+    cursor: "pointer",
+  },
+  btnOutline: {
     display: "block",
     width: "100%",
     background: "transparent",
     color: "#1E1A16",
-    border: "2px solid #1E1A16",
-    borderRadius: 10,
-    padding: 12,
+    border: "1.5px solid #1E1A16",
+    borderRadius: 8,
+    padding: 8,
     fontFamily: "inherit",
-    fontWeight: "bold",
-    fontSize: 12,
-    textTransform: "uppercase",
+    fontSize: 10,
     cursor: "pointer",
+    fontWeight: "bold",
   },
   ctaRow: {
     marginTop: "auto",

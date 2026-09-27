@@ -1,35 +1,49 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 /**
  * Done
  * Halaman konfirmasi akhir + opsi cetak.
- *
- * Print hanya menampilkan gambar hasil akhir (bukan seluruh halaman ini),
- * dicapai dengan elemen <img> tersembunyi yang HANYA muncul lewat
- * @media print (lihat index.css untuk aturan print-area/no-print).
+ * Dilengkapi timer otomatis kembali ke idle screen saat selesai berfoto.
  */
 export default function Done({ finalDataUrl, onPrint, onFinish }) {
+  const [countdown, setCountdown] = useState(25);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          onFinish();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [onFinish]);
+
   return (
     <>
-      <div style={styles.wrap} className="no-print">
-        <div style={styles.check}>✓</div>
-        <h2 style={styles.title}>Hasil tersimpan!</h2>
+      <div style={styles.wrap} className="screen-fade no-print">
+        <div style={styles.check} className="pop-badge">✓</div>
+        <h2 style={styles.title}>Hasil Tersimpan!</h2>
         <p style={styles.desc}>
           Terima kasih sudah berfoto 🎉<br />
-          Ingin mencetak hasilnya sekarang?
+          Hasil foto siap dicetak atau diunduh.
         </p>
 
-        <button style={styles.btnPrimary} onClick={onPrint} disabled={!finalDataUrl}>
+        <button style={styles.btnPrimary} onClick={onPrint} disabled={!finalDataUrl} className="btn-interactive">
           🖨 Cetak Sekarang
         </button>
-        <button style={styles.btnSecondary} onClick={onFinish}>
-          Selesai — Kembali ke Awal
+        <button style={styles.btnSecondary} onClick={onFinish} className="btn-interactive">
+          Selesai — Kembali ke Awal ({countdown}d)
         </button>
       </div>
 
       {/* Hanya dirender ke kertas saat print (disembunyikan di layar biasa) */}
       {finalDataUrl && (
-        <img src={finalDataUrl} alt="Hasil cetak" className="print-area" />
+        <img src={finalDataUrl} alt="Hasil cetak photobox" className="print-area" />
       )}
     </>
   );
@@ -59,10 +73,11 @@ const styles = {
     justifyContent: "center",
     fontSize: 30,
     marginBottom: 16,
+    boxShadow: "0 4px 12px rgba(62,124,107,0.3)",
   },
   title: {
     fontFamily: "Georgia, serif",
-    fontSize: 22,
+    fontSize: 24,
     margin: "0 0 8px",
   },
   desc: {
@@ -86,6 +101,7 @@ const styles = {
     textTransform: "uppercase",
     cursor: "pointer",
     marginBottom: 10,
+    boxShadow: "0 4px 12px rgba(216,72,46,0.2)",
   },
   btnSecondary: {
     width: "100%",

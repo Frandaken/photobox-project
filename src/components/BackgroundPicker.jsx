@@ -13,20 +13,24 @@ export default function BackgroundPicker({ onSelect, onBack }) {
   }, []);
 
   return (
-    <div style={styles.wrap}>
+    <div style={styles.wrap} className="screen-fade">
       <div style={styles.topbar}>
-        <button style={styles.backBtn} onClick={onBack}>‹ Kembali</button>
-        <span style={styles.stepLabel}>Pilih Background</span>
+        <button style={styles.backBtn} onClick={onBack} className="btn-interactive">
+          ‹ Kembali
+        </button>
+        <span style={styles.stepLabel}>Pilih Tema</span>
         <span style={{ width: 60 }} />
       </div>
 
       <div style={styles.content}>
-        <h2 style={styles.title}>Pilih tema visual</h2>
-        <p style={styles.desc}>
-          Warna dan corak dasar yang jadi latar hasil fotomu.
-        </p>
+        <div style={styles.headerArea}>
+          <h2 style={styles.title}>Pilih Tema Visual</h2>
+          <p style={styles.desc}>
+            Warna dasar yang akan menjadi latar belakang hasil fotomu.
+          </p>
+        </div>
 
-        {loading && <p style={styles.desc}>Memuat pilihan background…</p>}
+        {loading && <p style={styles.loading}>Memuat pilihan tema…</p>}
 
         <div style={styles.grid}>
           {backgrounds.map((bg) => (
@@ -34,6 +38,7 @@ export default function BackgroundPicker({ onSelect, onBack }) {
               key={bg.id}
               style={styles.card}
               onClick={() => onSelect(bg)}
+              className="card-interactive"
             >
               <div
                 style={{
@@ -67,6 +72,7 @@ const styles = {
     justifyContent: "space-between",
     padding: "12px 16px",
     borderBottom: "2px solid #1E1A16",
+    background: "#FFFDF8",
   },
   backBtn: {
     background: "none",
@@ -77,6 +83,7 @@ const styles = {
     letterSpacing: 1,
     cursor: "pointer",
     fontFamily: "inherit",
+    fontWeight: "bold",
   },
   stepLabel: {
     fontSize: 11,
@@ -86,47 +93,59 @@ const styles = {
   },
   content: {
     flex: 1,
-    padding: 16,
-    maxWidth: 480,
+    padding: "16px 16px 32px",
+    maxWidth: 640,
     margin: "0 auto",
     width: "100%",
     boxSizing: "border-box",
   },
+  headerArea: {
+    marginBottom: 14,
+  },
   title: {
     fontFamily: "Georgia, serif",
-    fontSize: 20,
+    fontSize: "clamp(20px, 4vw, 24px)",
     margin: "0 0 4px",
   },
   desc: {
-    fontSize: 11,
+    fontSize: 12,
+    color: "#6D6457",
+    margin: 0,
+    lineHeight: 1.4,
+  },
+  loading: {
+    fontSize: 12,
     color: "#8A8073",
-    margin: "0 0 16px",
-    lineHeight: 1.5,
+    padding: "20px 0",
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
+    gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+    gap: 12,
   },
   card: {
     border: "2px solid #1E1A16",
-    borderRadius: 10,
+    borderRadius: 12,
     background: "#fff",
-    padding: 10,
+    padding: 12,
     cursor: "pointer",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     gap: 8,
     fontFamily: "inherit",
+    textAlign: "center",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
   },
   swatch: {
     width: "100%",
     aspectRatio: "4/3",
-    borderRadius: 6,
-    border: "1px solid #1E1A16",
+    borderRadius: 8,
+    border: "1.5px solid #1E1A16",
+    boxShadow: "inset 0 1px 4px rgba(0,0,0,0.1)",
   },
   cardName: {
     fontSize: 12,
+    color: "#1E1A16",
   },
 };

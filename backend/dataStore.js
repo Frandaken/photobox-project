@@ -11,7 +11,7 @@ import path from "path";
  * yang sama seperti yang tadinya hardcode di frontend.
  */
 
-const DATA_DIR = process.env.DATA_DIR || "/app/data";
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const LAYOUTS_FILE = path.join(DATA_DIR, "layouts.json");
 const BACKGROUNDS_FILE = path.join(DATA_DIR, "backgrounds.json");
 

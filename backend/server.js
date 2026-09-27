@@ -1,13 +1,22 @@
 import "dotenv/config";
 import express from "express";
-import { uploadToSmb, checkSmbConnection } from "./smbUpload.js";
-import { getLayouts, saveLayouts, getBackgrounds, saveBackgrounds } from "./dataStore.js";
+import path from "path";
+import {
+  uploadToSmb,
+  checkSmbConnection,
+  checkNextcloudConnection,
+} from "./smbUpload.js";
+import {
+  getLayouts,
+  saveLayouts,
+  getBackgrounds,
+  saveBackgrounds,
+} from "./dataStore.js";
 import { verifyPin, requireAdminAuth } from "./adminAuth.js";
 
 const app = express();
 
-// Batas ukuran body dinaikkan karena kita kirim gambar sebagai base64
-// (beberapa foto original + 1 hasil komposit bisa cukup besar).
+// Batas ukuran body 50MB untuk dataURL base64 foto resolusi tinggi
 app.use(express.json({ limit: "50mb" }));
 
 /**
@@ -24,12 +33,7 @@ function dataUrlToBuffer(dataUrl) {
 
 /**
  * POST /api/upload
- * Body: { finalImage: dataURL, originalPhotos: dataURL[] }
- *
- * Simpan hasil akhir + semua foto original ke NAS lewat SMB.
- * Kalau upload SMB gagal, frontend sudah punya failsafe sendiri
- * (tombol unduh langsung dari browser), jadi di sini kita cukup
- * kembalikan error yang jelas.
+ * Simpan hasil akhir + foto original ke NAS (SMB / Nextcloud / Fail-safe Lokal)
  */
 app.post("/api/upload", async (req, res) => {
   const { finalImage, originalPhotos = [] } = req.body;
@@ -42,7 +46,10 @@ app.post("/api/upload", async (req, res) => {
   const finalFileName = `photobox-${sessionId}-final.jpg`;
 
   try {
-    await uploadToSmb(dataUrlToBuffer(finalImage), finalFileName);
+    const finalUploadResult = await uploadToSmb(
+      dataUrlToBuffer(finalImage),
+      finalFileName
+    );
     await Promise.all(
       originalPhotos.map((photo, i) =>
         uploadToSmb(
@@ -51,22 +58,35 @@ app.post("/api/upload", async (req, res) => {
         )
       )
     );
-    return res.json({ saved: true });
+
+    return res.json({
+      saved: true,
+      storage: finalUploadResult,
+      totalPhotos: 1 + originalPhotos.length,
+    });
   } catch (err) {
-    console.error("[SMB] Gagal menyimpan ke NAS:", err.message);
+    console.error("[Upload] Gagal menyimpan:", err.message);
     return res.status(502).json({
-      error: "Tidak bisa menyimpan ke penyimpanan NAS saat ini",
+      error: "Tidak bisa menyimpan ke penyimpanan saat ini",
       detail: err.message,
     });
   }
 });
 
 app.get("/api/layouts", async (_req, res) => {
-  res.json(await getLayouts());
+  try {
+    res.json(await getLayouts());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get("/api/backgrounds", async (_req, res) => {
-  res.json(await getBackgrounds());
+  try {
+    res.json(await getBackgrounds());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
@@ -75,11 +95,6 @@ app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 // Endpoint admin (butuh PIN)
 // ============================================================
 
-/**
- * POST /api/admin/login
- * Body: { pin: string }
- * Response: { token } kalau benar, 401 kalau salah.
- */
 app.post("/api/admin/login", (req, res) => {
   const { pin } = req.body;
   const token = verifyPin(pin);
@@ -89,17 +104,18 @@ app.post("/api/admin/login", (req, res) => {
   res.json({ token });
 });
 
-/**
- * GET /api/admin/status
- * Cek status koneksi ke NAS (SMB), dipakai Admin Panel untuk indikator.
- */
 app.get("/api/admin/status", requireAdminAuth, async (_req, res) => {
-  try {
-    await checkSmbConnection();
-    res.json({ smb: "connected" });
-  } catch (err) {
-    res.json({ smb: "error", detail: err.message });
-  }
+  const smbResult = await checkSmbConnection();
+  const nextcloudResult = await checkNextcloudConnection();
+
+  res.json({
+    local: {
+      active: true,
+      directory: process.env.DATA_DIR || path.join(process.cwd(), "data"),
+    },
+    smb: smbResult,
+    nextcloud: nextcloudResult,
+  });
 });
 
 app.put("/api/admin/layouts", requireAdminAuth, async (req, res) => {
@@ -121,6 +137,6 @@ app.put("/api/admin/backgrounds", requireAdminAuth, async (req, res) => {
 });
 
 const port = process.env.PORT || 3001;
-app.listen(port, () => {
-  console.log(`Photobox backend jalan di port ${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Photobox backend jalan di http://0.0.0.0:${port}`);
 });

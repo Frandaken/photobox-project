@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import IdleScreen from "./components/IdleScreen.jsx";
 import LayoutPicker from "./components/LayoutPicker.jsx";
 import BackgroundPicker from "./components/BackgroundPicker.jsx";
@@ -46,6 +46,29 @@ export default function App() {
     setFinalDataUrl(null);
     setScreen("idle");
   };
+
+  // Inactivity timeout untuk photobox kiosk (kembali ke idle jika ditinggal)
+  useEffect(() => {
+    if (screen === "idle" || adminToken) return;
+
+    let timeoutId;
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      // 150 detik tanpa aktivitas -> kembali ke idle
+      timeoutId = setTimeout(() => {
+        resetSession();
+      }, 150000);
+    };
+
+    const events = ["mousedown", "touchstart", "keydown", "scroll"];
+    events.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach((ev) => window.removeEventListener(ev, resetTimer));
+    };
+  }, [screen, adminToken]);
 
   const handlePrint = () => {
     window.print();

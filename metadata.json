@@ -1,0 +1,7 @@
+{
+  "name": "Photobox",
+  "description": "Photobox — foto instan, pilih frame favoritmu",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
