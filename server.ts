@@ -6,6 +6,7 @@ import {
   checkSmbConnection,
   checkNextcloudConnection,
   normalizeSmbAddress,
+  getSessionPaths,
 } from "./backend/smbUpload.js";
 import { getLayouts, saveLayouts, getBackgrounds, saveBackgrounds } from "./backend/dataStore.js";
 import { verifyPin, requireAdminAuth } from "./backend/adminAuth.js";
@@ -32,23 +33,35 @@ async function startServer() {
       return res.status(400).json({ error: "finalImage wajib diisi" });
     }
 
-    const sessionId = Date.now();
-    const finalFileName = `photobox-${sessionId}-final.jpg`;
+    // Kategorisasikan path berdasarkan hierarki: PHOTOBOX/YYYY/MM/DDMMYY/SESI DDMMYY HHMMSS
+    const sessionInfo = getSessionPaths(new Date());
 
     try {
-      const finalUploadResult = await uploadToSmb(dataUrlToBuffer(finalImage), finalFileName);
-      const originalResults = await Promise.all(
-        originalPhotos.map((photo: string, i: number) =>
-          uploadToSmb(
-            dataUrlToBuffer(photo),
-            `photobox-${sessionId}-original-${i + 1}.jpg`
-          )
-        )
+      const finalUploadResult = await uploadToSmb(
+        dataUrlToBuffer(finalImage),
+        sessionInfo.finalRelativePath,
+        true,
+        sessionInfo.sessionDir
       );
+
+      if (originalPhotos.length > 0) {
+        Promise.all(
+          originalPhotos.map((photo: string, i: number) =>
+            uploadToSmb(
+              dataUrlToBuffer(photo),
+              sessionInfo.getOriginalRelativePath(i + 1),
+              false
+            )
+          )
+        ).catch((err: any) => console.warn("[Upload] Gagal upload foto asli:", err?.message));
+      }
 
       return res.json({
         saved: true,
+        sessionName: sessionInfo.sessionName,
+        sessionDir: sessionInfo.sessionDir,
         storage: finalUploadResult,
+        shareUrl: finalUploadResult.shareUrl || null,
         totalPhotos: 1 + originalPhotos.length,
       });
     } catch (err: any) {

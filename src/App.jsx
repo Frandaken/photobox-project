@@ -34,6 +34,8 @@ export default function App() {
   const [chosenPhotos, setChosenPhotos] = useState([]); // subset yang dipilih, sejumlah slot layout
   const [placedStickers, setPlacedStickers] = useState([]);
   const [finalDataUrl, setFinalDataUrl] = useState(null); // hasil akhir untuk print
+  const [shareUrl, setShareUrl] = useState(null); // URL share Nextcloud view-only
+  const [sessionName, setSessionName] = useState(null); // misal "SESI 230426 193326"
 
   const [adminToken, setAdminToken] = useState(null); // null = admin panel tertutup
 
@@ -44,6 +46,8 @@ export default function App() {
     setChosenPhotos([]);
     setPlacedStickers([]);
     setFinalDataUrl(null);
+    setShareUrl(null);
+    setSessionName(null);
     setScreen("idle");
   };
 
@@ -151,8 +155,10 @@ export default function App() {
             chosenPhotos={chosenPhotos}
             stickers={placedStickers}
             allOriginalPhotos={rawPhotos}
-            onDone={(dataUrl) => {
+            onDone={(dataUrl, nextcloudShareUrl, name) => {
               setFinalDataUrl(dataUrl);
+              if (nextcloudShareUrl) setShareUrl(nextcloudShareUrl);
+              if (name) setSessionName(name);
               setScreen("done");
             }}
             onBack={() => setScreen("stickers")}
@@ -163,6 +169,8 @@ export default function App() {
         return (
           <Done
             finalDataUrl={finalDataUrl}
+            shareUrl={shareUrl}
+            sessionName={sessionName}
             onPrint={handlePrint}
             onFinish={resetSession}
           />

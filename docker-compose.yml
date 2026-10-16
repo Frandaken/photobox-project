@@ -3,39 +3,38 @@ services:
     build:
       context: https://github.com/Frandaken/photobox-project.git
       dockerfile: frontend/Dockerfile
-    container_name: photobox-frontend
+      no_cache: true
+    container_name: app-frontend
     ports:
-      - "8095:80"
+      - 80:80
     restart: unless-stopped
     depends_on:
       - backend
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - app-network
 
   backend:
     build:
       context: https://github.com/Frandaken/photobox-project.git
       dockerfile: backend/Dockerfile
-    container_name: photobox-backend
+      no_cache: true
+    container_name: app-backend
     ports:
-      - "3001:3001"
-    env_file:
-      - ./.env
+      - 3000:3000
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+    networks:
+      app-network:
+        aliases:
+          - backend
+          - app-backend
 
-# CATATAN:
-# - context di atas selalu meng-clone SELURUH repo (bukan hanya subfolder),
-#   makanya "dockerfile:" perlu path lengkap (frontend/Dockerfile,
-#   backend/Dockerfile), dan isi Dockerfile itu sendiri juga di-prefix
-#   "frontend/"/"backend/" saat COPY.
-#
-# - env_file "./.env" MERUJUK ke file di NAS (folder tempat
-#   docker-compose.yml ini disimpan oleh Dockge), BUKAN file di dalam
-#   repo GitHub. File ini sengaja tidak di-commit ke Git karena berisi
-#   kredensial asli (SMB) dan PIN admin. Buat file ini manual sekali
-#   di NAS, isinya sama seperti format backend/.env.example di repo.
-#
-# - volume "./data:/app/data" menyimpan data Layout & Background yang
-#   diedit lewat Admin Panel, supaya perubahan admin tetap ada meski
-#   container backend di-rebuild/redeploy. Folder "./data" akan otomatis
-#   dibuat oleh Docker di NAS, sejajar dengan docker-compose.yml ini.
+networks:
+  app-network:
+    driver: bridge

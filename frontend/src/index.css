@@ -1,0 +1,222 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  min-height: 100vh;
+  background: #FFFDF8;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: 'Courier New', ui-monospace, monospace;
+  color: #1E1A16;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Scrollbar Vintage Minimalist */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #EDE7D9;
+}
+::-webkit-scrollbar-thumb {
+  background: #C4BAA9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8A8073;
+}
+
+/* ============================================================
+   Keyframe Animations
+   ============================================================ */
+
+@keyframes screenFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes flashEffect {
+  0% {
+    opacity: 0.95;
+    background: #FFFFFF;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes timerPulse {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes polaroidFloat1 {
+  0%, 100% {
+    transform: rotate(-9deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-7deg) translateY(-8px);
+  }
+}
+
+@keyframes polaroidFloat2 {
+  0%, 100% {
+    transform: rotate(4deg) translateY(0);
+  }
+  50% {
+    transform: rotate(6deg) translateY(-10px);
+  }
+}
+
+@keyframes polaroidFloat3 {
+  0%, 100% {
+    transform: rotate(-2deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-12px);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    text-shadow: 0 0 10px rgba(216, 72, 46, 0.4), 0 0 20px rgba(216, 72, 46, 0.2);
+  }
+  50% {
+    text-shadow: 0 0 20px rgba(216, 72, 46, 0.8), 0 0 35px rgba(227, 166, 62, 0.6);
+  }
+}
+
+@keyframes badgePop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes popIn {
+  0% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   Helper Animation Classes
+   ============================================================ */
+
+.screen-fade {
+  animation: screenFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  width: 100%;
+  height: 100%;
+}
+
+.card-interactive {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(30, 26, 22, 0.1);
+}
+.card-interactive:active {
+  transform: scale(0.98);
+}
+
+.btn-interactive {
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+}
+.btn-interactive:hover {
+  filter: brightness(1.05);
+}
+.btn-interactive:active {
+  transform: scale(0.96);
+}
+
+.polaroid-1 {
+  animation: polaroidFloat1 6s ease-in-out infinite;
+}
+.polaroid-2 {
+  animation: polaroidFloat2 5.5s ease-in-out infinite 0.5s;
+}
+.polaroid-3 {
+  animation: polaroidFloat3 6.5s ease-in-out infinite 1s;
+}
+
+.tap-glow {
+  animation: pulseGlow 2.5s infinite;
+}
+
+.pop-badge {
+  animation: badgePop 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* ============================================================
+   Print Area
+   ============================================================ */
+
+.print-area {
+  display: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    display: block !important;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+  }
+  @page {
+    margin: 0;
+  }
+}

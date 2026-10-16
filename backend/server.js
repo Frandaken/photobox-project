@@ -5,6 +5,7 @@ import {
   uploadToSmb,
   checkSmbConnection,
   checkNextcloudConnection,
+  getSessionPaths,
 } from "./smbUpload.js";
 import {
   getLayouts,
@@ -42,26 +43,37 @@ app.post("/api/upload", async (req, res) => {
     return res.status(400).json({ error: "finalImage wajib diisi" });
   }
 
-  const sessionId = Date.now();
-  const finalFileName = `photobox-${sessionId}-final.jpg`;
+  // Kategorisasikan path berdasarkan hierarki: PHOTOBOX/YYYY/MM/DDMMYY/SESI DDMMYY HHMMSS
+  const sessionInfo = getSessionPaths(new Date());
 
   try {
+    // Unggah foto hasil (frame gabungan) dan buat link share publik view-only dari Nextcloud
     const finalUploadResult = await uploadToSmb(
       dataUrlToBuffer(finalImage),
-      finalFileName
+      sessionInfo.finalRelativePath,
+      true,
+      sessionInfo.sessionDir // Tautan share publik Nextcloud mengarah ke folder sesi
     );
-    await Promise.all(
-      originalPhotos.map((photo, i) =>
-        uploadToSmb(
-          dataUrlToBuffer(photo),
-          `photobox-${sessionId}-original-${i + 1}.jpg`
+
+    // Unggah foto-foto pose asli ke dalam folder sesi yang sama
+    if (originalPhotos.length > 0) {
+      Promise.all(
+        originalPhotos.map((photo, i) =>
+          uploadToSmb(
+            dataUrlToBuffer(photo),
+            sessionInfo.getOriginalRelativePath(i + 1),
+            false
+          )
         )
-      )
-    );
+      ).catch((err) => console.warn("[Upload] Gagal upload foto asli:", err.message));
+    }
 
     return res.json({
       saved: true,
+      sessionName: sessionInfo.sessionName,
+      sessionDir: sessionInfo.sessionDir,
       storage: finalUploadResult,
+      shareUrl: finalUploadResult.shareUrl || null,
       totalPhotos: 1 + originalPhotos.length,
     });
   } catch (err) {
@@ -136,7 +148,7 @@ app.put("/api/admin/backgrounds", requireAdminAuth, async (req, res) => {
   res.json({ saved: true });
 });
 
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3000;
 app.listen(port, "0.0.0.0", () => {
   console.log(`Photobox backend jalan di http://0.0.0.0:${port}`);
 });
