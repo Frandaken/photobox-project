@@ -22,8 +22,21 @@ export default function StickerOverlay({
   const baseCanvasRef = useRef(null);
   const containerRef = useRef(null);
   const [baseReady, setBaseReady] = useState(false);
-  const [placedStickers, setPlacedStickers] = useState([]); // {uid, stickerId, src, x, y, scale, rotation}
+  const [placedStickers, setPlacedStickers] = useState([]); // {uid, stickerId, src, x, y, width, height, scale, rotation}
   const [selectedUid, setSelectedUid] = useState(null);
+  const [stickersList, setStickersList] = useState(STICKERS);
+
+  // Ambil daftar stiker terbaru dari server (termasuk stiker yang diunggah admin)
+  useEffect(() => {
+    fetch("/api/stickers")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setStickersList(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Render komposisi dasar sekali saat layout/background/photos siap
   useEffect(() => {
@@ -41,13 +54,19 @@ export default function StickerOverlay({
 
   const addSticker = (sticker) => {
     const uid = `${sticker.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const baseW = sticker.width || Math.round((layout.canvasWidth || 1200) * 0.22);
+    const aspect = sticker.aspectRatio || 1;
+    const baseH = sticker.height || Math.round(baseW / aspect);
+
     const newSticker = {
       uid,
       stickerId: sticker.id,
       src: sticker.src,
       x: layout.canvasWidth / 2,
       y: layout.canvasHeight / 2,
-      scale: 0.65,
+      width: baseW,
+      height: baseH,
+      scale: 1.0,
       rotation: 0,
     };
     setPlacedStickers((prev) => [...prev, newSticker]);
@@ -185,7 +204,7 @@ export default function StickerOverlay({
         <div style={styles.pickerSection}>
           <span style={styles.pickerLabel}>PILIH STIKER (+ Tambahkan)</span>
           <div style={styles.stickerRow}>
-            {STICKERS.map((sticker) => (
+            {stickersList.map((sticker) => (
               <button
                 key={sticker.id}
                 style={styles.stickerBtn}
@@ -376,6 +395,11 @@ function DraggableSticker({
     window.addEventListener("touchend", onHandleUp);
   };
 
+  const baseW = sticker.width || Math.round(canvasWidth * 0.22);
+  const baseH = sticker.height || baseW;
+  const renderW = baseW * (sticker.scale || 1);
+  const renderH = baseH * (sticker.scale || 1);
+
   return (
     <div
       ref={elRef}
@@ -388,13 +412,13 @@ function DraggableSticker({
         position: "absolute",
         left: `${(sticker.x / canvasWidth) * 100}%`,
         top: `${(sticker.y / canvasHeight) * 100}%`,
-        width: `${(150 * (sticker.scale || 1) / canvasWidth) * 100}%`,
-        aspectRatio: "1 / 1",
+        width: `${(renderW / canvasWidth) * 100}%`,
+        height: `${(renderH / canvasHeight) * 100}%`,
         transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
         touchAction: "none",
         cursor: "grab",
         outline: selected ? "2.5px dashed #D8482E" : "none",
-        outlineOffset: 5,
+        outlineOffset: 4,
         borderRadius: 8,
         userSelect: "none",
       }}
@@ -406,6 +430,7 @@ function DraggableSticker({
         style={{
           width: "100%",
           height: "100%",
+          objectFit: "contain",
           pointerEvents: "none",
           userSelect: "none",
           display: "block",

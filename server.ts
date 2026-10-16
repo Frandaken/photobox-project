@@ -2,13 +2,18 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import {
-  uploadToSmb,
-  checkSmbConnection,
+  uploadPhoto,
   checkNextcloudConnection,
-  normalizeSmbAddress,
   getSessionPaths,
 } from "./backend/smbUpload.js";
-import { getLayouts, saveLayouts, getBackgrounds, saveBackgrounds } from "./backend/dataStore.js";
+import {
+  getLayouts,
+  saveLayouts,
+  getBackgrounds,
+  saveBackgrounds,
+  getStickers,
+  saveStickers,
+} from "./backend/dataStore.js";
 import { verifyPin, requireAdminAuth } from "./backend/adminAuth.js";
 
 async function startServer() {
@@ -37,7 +42,7 @@ async function startServer() {
     const sessionInfo = getSessionPaths(new Date());
 
     try {
-      const finalUploadResult = await uploadToSmb(
+      const finalUploadResult = await uploadPhoto(
         dataUrlToBuffer(finalImage),
         sessionInfo.finalRelativePath,
         true,
@@ -47,7 +52,7 @@ async function startServer() {
       if (originalPhotos.length > 0) {
         Promise.all(
           originalPhotos.map((photo: string, i: number) =>
-            uploadToSmb(
+            uploadPhoto(
               dataUrlToBuffer(photo),
               sessionInfo.getOriginalRelativePath(i + 1),
               false
@@ -89,6 +94,14 @@ async function startServer() {
     }
   });
 
+  app.get("/api/stickers", async (_req, res) => {
+    try {
+      res.json(await getStickers());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
   // ============================================================
@@ -105,7 +118,6 @@ async function startServer() {
   });
 
   app.get("/api/admin/status", requireAdminAuth, async (_req, res) => {
-    const smbResult = await checkSmbConnection();
     const nextcloudResult = await checkNextcloudConnection();
 
     res.json({
@@ -113,7 +125,6 @@ async function startServer() {
         active: true,
         directory: process.env.DATA_DIR || path.join(process.cwd(), "data"),
       },
-      smb: smbResult,
       nextcloud: nextcloudResult,
     });
   });
@@ -133,6 +144,15 @@ async function startServer() {
       return res.status(400).json({ error: "Body harus berupa array background" });
     }
     await saveBackgrounds(backgrounds);
+    res.json({ saved: true });
+  });
+
+  app.put("/api/admin/stickers", requireAdminAuth, async (req, res) => {
+    const stickers = req.body;
+    if (!Array.isArray(stickers)) {
+      return res.status(400).json({ error: "Body harus berupa array stiker" });
+    }
+    await saveStickers(stickers);
     res.json({ saved: true });
   });
 

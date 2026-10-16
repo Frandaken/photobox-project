@@ -1,11 +1,8 @@
-import SambaClient from "samba-client";
 import fs from "fs/promises";
 import path from "path";
-import os from "os";
 
-// Cache direktori yang sudah dibuat untuk menghindari request berulang
+// Cache direktori Nextcloud yang sudah dibuat agar menghindari MKCOL berulang
 const createdNextcloudDirs = new Set();
-const createdSmbDirs = new Set();
 
 /**
  * Format hierarki sesi sesuai spesifikasi:
@@ -14,17 +11,32 @@ const createdSmbDirs = new Set();
  * │   ├── 04/        # mm
  * │   │   ├── 230426/ # ddmmyy
  * │   │   │   └── "SESI 230426 193326" # ddmmyy dan hhmmss foto hasil (frame gabungan)
+ *
+ * Menggunakan zona waktu UTC+07:00 (Asia/Jakarta / WIB) dan format 24 jam.
  */
 export function getSessionPaths(date = new Date()) {
-  const yyyy = String(date.getFullYear());
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const getPart = (type) => parts.find((p) => p.type === type)?.value || "";
+
+  const yyyy = getPart("year");
+  const mm = getPart("month");
+  const dd = getPart("day");
   const yy = yyyy.slice(-2);
   const ddmmyy = `${dd}${mm}${yy}`;
 
-  const hh = String(date.getHours()).padStart(2, "0");
-  const min = String(date.getMinutes()).padStart(2, "0");
-  const ss = String(date.getSeconds()).padStart(2, "0");
+  const hh = getPart("hour");
+  const min = getPart("minute");
+  const ss = getPart("second");
   const hhmmss = `${hh}${min}${ss}`;
 
   const sessionName = `SESI ${ddmmyy} ${hhmmss}`;
@@ -43,19 +55,6 @@ export function getSessionPaths(date = new Date()) {
     finalRelativePath,
     getOriginalRelativePath: (index) => `${sessionDir}/${sessionName} - Original ${index}.jpg`,
   };
-}
-
-/**
- * Normalisasi alamat SMB dari format Windows (\\192.168.1.1\share)
- * menjadi format standar UNC URL (//192.168.1.1/share)
- */
-export function normalizeSmbAddress(addr) {
-  if (!addr) return "";
-  let clean = addr.trim().replace(/\\+/g, "/");
-  if (!clean.startsWith("//")) {
-    clean = "//" + clean.replace(/^\/+/, "");
-  }
-  return clean;
 }
 
 /**
@@ -78,7 +77,7 @@ export function resolveFullPath(baseFolder, relativePath) {
 }
 
 /**
- * Simpan ke direktori lokal (selalu dieksekusi sebagai fail-safe)
+ * Simpan ke direktori lokal (selalu dieksekusi sebagai fail-safe utama)
  */
 async function saveToLocalDisk(buffer, remoteFilePath) {
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
@@ -222,7 +221,7 @@ export async function uploadToNextcloud(buffer, remoteFilePath, createShare = fa
 }
 
 /**
- * Cek koneksi ke Nextcloud WebDAV
+ * Cek status koneksi ke Nextcloud WebDAV
  */
 export async function checkNextcloudConnection() {
   const nextcloudUrl = process.env.NEXTCLOUD_URL;
@@ -247,101 +246,31 @@ export async function checkNextcloudConnection() {
     });
 
     if (res.ok || res.status === 207) {
-      return { configured: true, connected: true };
+      return { configured: true, connected: true, url: nextcloudUrl };
     }
-    return { configured: true, connected: false, detail: `Status ${res.status} ${res.statusText}` };
+    return { configured: true, connected: false, url: nextcloudUrl, detail: `Status ${res.status} ${res.statusText}` };
   } catch (err) {
-    return { configured: true, connected: false, detail: err.message };
+    return { configured: true, connected: false, url: nextcloudUrl, detail: err.message };
   }
 }
 
 /**
- * Pastikan direktori bertingkat dibuat di SMB share
+ * uploadPhoto (penyimpanan foto photobox):
+ * 1. Simpan ke disk lokal fail-safe (data/uploads/...)
+ * 2. Upload ke Nextcloud WebDAV dan buat share link jika diminta
  */
-async function ensureSmbDir(client, fullDirPath) {
-  if (!fullDirPath) return;
-  const parts = fullDirPath.replace(/^\/+|\/+$/g, "").split("/");
-  let cur = "";
-  for (const part of parts) {
-    cur += (cur ? "/" : "") + part;
-    if (!createdSmbDirs.has(cur)) {
-      try {
-        await client.mkdir(cur);
-      } catch {}
-      createdSmbDirs.add(cur);
-    }
-  }
-}
-
-/**
- * Upload ke NAS via SMB
- */
-async function uploadToSmbOnly(buffer, remoteFilePath) {
-  if (!process.env.SMB_ADDRESS) {
-    return false;
-  }
-
-  const smbAddress = normalizeSmbAddress(process.env.SMB_ADDRESS);
-  const client = new SambaClient({
-    address: smbAddress,
-    username: process.env.SMB_USERNAME,
-    password: process.env.SMB_PASSWORD,
-    domain: process.env.SMB_DOMAIN || undefined,
-    customArgs: ["--max-protocol=SMB3", "--option=client min protocol=NT1", "--timeout=4"],
-  });
-
-  const baseFolder = process.env.SMB_UPLOAD_DIR || "";
-  const remotePath = resolveFullPath(baseFolder, remoteFilePath);
-  const parentDir = remotePath.includes("/") ? remotePath.substring(0, remotePath.lastIndexOf("/")) : "";
-
-  if (parentDir) {
-    await ensureSmbDir(client, parentDir);
-  }
-
-  const tmpPath = path.join(os.tmpdir(), `photobox-${Date.now()}-${path.basename(remoteFilePath)}`);
-  await fs.writeFile(tmpPath, buffer);
-
-  try {
-    await client.sendFile(tmpPath, remotePath);
-    return true;
-  } finally {
-    await fs.unlink(tmpPath).catch(() => {});
-  }
-}
-
-/**
- * Upload ke SMB dengan batas waktu aman (agar tidak memblokir saat diuji di luar jaringan LAN)
- */
-async function uploadToSmbWithTimeout(buffer, remoteFilePath, timeoutMs = 4500) {
-  return Promise.race([
-    uploadToSmbOnly(buffer, remoteFilePath),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("SMB timeout (hanya dapat diakses di jaringan lokal NAS)")), timeoutMs)
-    ),
-  ]);
-}
-
-/**
- * uploadToSmb
- * Menulis buffer gambar ke tujuan penyimpanan:
- * 1. Selalu simpan ke folder disk lokal (data/uploads/...) sebagai fail-safe utama
- * 2. Coba upload ke Nextcloud jika dikonfigurasi (dan buat share link jika createShare === true)
- * 3. Coba upload ke SMB NAS jika dikonfigurasi
- */
-export async function uploadToSmb(buffer, remoteFilePath, createShare = false, shareTargetPath = null) {
-  // 1. Selalu simpan lokal
+export async function uploadPhoto(buffer, remoteFilePath, createShare = false, shareTargetPath = null) {
+  // 1. Selalu simpan lokal sebagai backup fail-safe
   await saveToLocalDisk(buffer, remoteFilePath);
 
   const results = {
     local: true,
-    smb: false,
     nextcloud: false,
     shareUrl: null,
-    smbError: null,
     nextcloudError: null,
   };
 
-  // 2. Coba upload ke Nextcloud jika ada env
+  // 2. Upload ke Nextcloud jika konfigurasi tersedia
   if (process.env.NEXTCLOUD_URL) {
     try {
       const ncRes = await uploadToNextcloud(buffer, remoteFilePath, createShare, shareTargetPath);
@@ -353,46 +282,8 @@ export async function uploadToSmb(buffer, remoteFilePath, createShare = false, s
     }
   }
 
-  // 3. Coba upload ke SMB jika ada env
-  if (process.env.SMB_ADDRESS) {
-    try {
-      results.smb = await uploadToSmbWithTimeout(buffer, remoteFilePath);
-    } catch (err) {
-      console.warn("[SMB] Status upload NAS:", err.message);
-      results.smbError = err.message;
-    }
-  }
-
   return results;
 }
 
-/**
- * checkSmbConnection
- * Uji koneksi SMB dengan me-list isi direktori share.
- */
-export async function checkSmbConnection() {
-  if (!process.env.SMB_ADDRESS) {
-    return { configured: false };
-  }
-
-  const smbAddress = normalizeSmbAddress(process.env.SMB_ADDRESS);
-  const client = new SambaClient({
-    address: smbAddress,
-    username: process.env.SMB_USERNAME,
-    password: process.env.SMB_PASSWORD,
-    domain: process.env.SMB_DOMAIN || undefined,
-    customArgs: ["--max-protocol=SMB3", "--option=client min protocol=NT1", "--timeout=4"],
-  });
-
-  try {
-    await client.list(process.env.SMB_UPLOAD_DIR || ".");
-    return { configured: true, connected: true, address: smbAddress };
-  } catch (err) {
-    return {
-      configured: true,
-      connected: false,
-      address: smbAddress,
-      detail: err.message,
-    };
-  }
-}
+// Alias untuk kompatibilitas ke belakang
+export const uploadToSmb = uploadPhoto;

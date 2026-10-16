@@ -188,8 +188,17 @@ export async function drawStickers(canvas, stickers = []) {
   stickers.forEach((sticker, i) => {
     const img = images[i];
     if (!img) return;
-    const w = img.width * (sticker.scale || 1);
-    const h = img.height * (sticker.scale || 1);
+
+    // Hitung ukuran proporsional persis sama dengan yang ditampilkan di StickerOverlay
+    const baseW = sticker.width || 200;
+    const baseH =
+      sticker.height ||
+      (img.naturalHeight && img.naturalWidth
+        ? (baseW * img.naturalHeight) / img.naturalWidth
+        : baseW);
+
+    const w = baseW * (sticker.scale || 1);
+    const h = baseH * (sticker.scale || 1);
 
     ctx.save();
     ctx.translate(sticker.x, sticker.y);

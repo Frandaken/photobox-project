@@ -18,10 +18,11 @@ export default function AdminPanel({ token, onClose }) {
 
   const [layouts, setLayouts] = useState([]);
   const [backgrounds, setBackgrounds] = useState([]);
+  const [stickers, setStickers] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   const [saveMsg, setSaveMsg] = useState(null);
 
-  // Tab aktif di dalam admin panel: 'layouts', 'storage', 'backgrounds'
+  // Tab aktif di dalam admin panel: 'layouts', 'storage', 'backgrounds', 'stickers'
   const [activeTab, setActiveTab] = useState("layouts");
   const [selectedLayoutId, setSelectedLayoutId] = useState(null);
 
@@ -46,14 +47,17 @@ export default function AdminPanel({ token, onClose }) {
   const loadAll = async () => {
     setLoadingData(true);
     try {
-      const [layoutsRes, bgRes] = await Promise.all([
+      const [layoutsRes, bgRes, stickersRes] = await Promise.all([
         fetch("/api/layouts"),
         fetch("/api/backgrounds"),
+        fetch("/api/stickers"),
       ]);
       const layoutsData = await layoutsRes.json();
       const bgData = await bgRes.json();
+      const stickersData = await stickersRes.json();
       setLayouts(layoutsData);
       setBackgrounds(bgData);
+      setStickers(Array.isArray(stickersData) ? stickersData : []);
       if (layoutsData.length > 0 && !selectedLayoutId) {
         setSelectedLayoutId(layoutsData[0].id);
       }
@@ -101,6 +105,51 @@ export default function AdminPanel({ token, onClose }) {
     } catch {
       flashSaved("Gagal menyimpan ke server");
     }
+  };
+
+  const saveStickers = async (next) => {
+    setStickers(next);
+    try {
+      await fetch("/api/admin/stickers", {
+        method: "PUT",
+        headers: authHeaders,
+        body: JSON.stringify(next),
+      });
+      flashSaved("Stiker tersimpan ✓");
+    } catch {
+      flashSaved("Gagal menyimpan ke server");
+    }
+  };
+
+  const handleUploadSticker = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const img = new Image();
+      img.onload = () => {
+        const aspect = img.naturalWidth / img.naturalHeight;
+        const baseW = 220;
+        const baseH = Math.round(baseW / aspect);
+
+        const newSticker = {
+          id: `custom-${Date.now()}`,
+          name: file.name.replace(/\.[^/.]+$/, "").slice(0, 24) || "Stiker Baru",
+          src: dataUrl,
+          aspectRatio: aspect,
+          width: baseW,
+          height: baseH,
+        };
+
+        const next = [...stickers, newSticker];
+        saveStickers(next);
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
   // --- Handlers Layout ---
@@ -302,7 +351,7 @@ export default function AdminPanel({ token, onClose }) {
           }}
           onClick={() => setActiveTab("storage")}
         >
-          ☁ Status Penyimpanan & NAS
+          ☁ Status Penyimpanan (Nextcloud)
         </button>
         <button
           style={{
@@ -312,6 +361,15 @@ export default function AdminPanel({ token, onClose }) {
           onClick={() => setActiveTab("backgrounds")}
         >
           🎨 Background ({backgrounds.length})
+        </button>
+        <button
+          style={{
+            ...styles.tabBtn,
+            ...(activeTab === "stickers" ? styles.tabBtnActive : {}),
+          }}
+          onClick={() => setActiveTab("stickers")}
+        >
+          ⭐ Kelola Stiker PNG ({stickers.length})
         </button>
       </div>
 
@@ -609,7 +667,7 @@ export default function AdminPanel({ token, onClose }) {
             )}
 
             {/* ==================================================== */}
-            {/* TAB 2: STATUS PENYIMPANAN (SMB NAS & CLOUD)         */}
+            {/* TAB 2: STATUS PENYIMPANAN (NEXTCLOUD & LOKAL)        */}
             {/* ==================================================== */}
             {activeTab === "storage" && (
               <div style={styles.storageTabWrap}>
@@ -627,50 +685,11 @@ export default function AdminPanel({ token, onClose }) {
                 </div>
 
                 <div style={styles.storageCardsGrid}>
-                  {/* SMB NAS Card */}
-                  <div style={styles.storageCard}>
-                    <div style={styles.storageCardHeader}>
-                      <span style={styles.storageIcon}>🖥</span>
-                      <h3 style={styles.storageCardTitle}>Penyimpanan NAS (SMB)</h3>
-                    </div>
-
-                    {status?.smb?.configured ? (
-                      status.smb.connected ? (
-                        <div style={styles.statusSuccessBox}>
-                          <b>✓ Terhubung ke SMB NAS</b>
-                          <p style={styles.storageDetail}>
-                            Alamat: <code>{status.smb.address}</code>
-                          </p>
-                        </div>
-                      ) : (
-                        <div style={styles.statusWarningBox}>
-                          <b>⚠ Gagal terhubung ke SMB NAS</b>
-                          <p style={styles.storageDetail}>
-                            Alamat: <code>{status.smb.address}</code>
-                            <br />
-                            Detail: {status.smb.detail}
-                          </p>
-                          <small style={styles.hintText}>
-                            Sistem secara otomatis mengalihkan foto ke folder lokal
-                            sebagai fail-safe, dan user tetap bisa mengunduh foto langsung.
-                          </small>
-                        </div>
-                      )
-                    ) : (
-                      <div style={styles.statusMutedBox}>
-                        <i>Belum Dikonfigurasi di Environment</i>
-                        <p style={styles.storageDetail}>
-                          Set <code>SMB_ADDRESS</code> di env atau docker-compose untuk mengaktifkan.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
                   {/* Nextcloud Card */}
                   <div style={styles.storageCard}>
                     <div style={styles.storageCardHeader}>
                       <span style={styles.storageIcon}>☁</span>
-                      <h3 style={styles.storageCardTitle}>Nextcloud (WebDAV)</h3>
+                      <h3 style={styles.storageCardTitle}>Nextcloud (WebDAV & Public Share)</h3>
                     </div>
 
                     {status?.nextcloud?.configured ? (
@@ -788,6 +807,85 @@ export default function AdminPanel({ token, onClose }) {
                       >
                         🗑 Hapus
                       </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ==================================================== */}
+            {/* TAB 4: KELOLA STIKER PNG                            */}
+            {/* ==================================================== */}
+            {activeTab === "stickers" && (
+              <div style={styles.bgTabWrap}>
+                <div style={styles.sectionHeaderRow}>
+                  <div>
+                    <h2 style={styles.sectionTitle}>
+                      Koleksi Stiker Photobox ({stickers.length})
+                    </h2>
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6D6457" }}>
+                      Unggah stiker PNG transparan untuk didekorasikan oleh pengguna di bilik foto.
+                    </p>
+                  </div>
+                  <label style={styles.addBtn} className="btn-interactive">
+                    + Unggah Stiker PNG
+                    <input
+                      type="file"
+                      accept="image/png,image/webp,image/svg+xml"
+                      style={{ display: "none" }}
+                      onChange={handleUploadSticker}
+                    />
+                  </label>
+                </div>
+
+                <div style={styles.stickerGrid}>
+                  {stickers.map((s) => (
+                    <div key={s.id} style={styles.stickerCard}>
+                      <div style={styles.stickerThumbBox}>
+                        <img
+                          src={s.src}
+                          alt={s.name}
+                          style={styles.stickerThumbImg}
+                        />
+                      </div>
+                      <div style={styles.fieldRow}>
+                        <label style={styles.label}>Nama Stiker</label>
+                        <input
+                          style={styles.input}
+                          value={s.name}
+                          onChange={(e) => {
+                            const next = stickers.map((item) =>
+                              item.id === s.id
+                                ? { ...item, name: e.target.value }
+                                : item
+                            );
+                            setStickers(next);
+                          }}
+                          onBlur={() => saveStickers(stickers)}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginTop: 4,
+                        }}
+                      >
+                        <span style={{ fontSize: 11, color: "#8A8073" }}>
+                          {s.width || 200} × {s.height || 200} px
+                        </span>
+                        <button
+                          style={styles.deleteBtn}
+                          onClick={() => {
+                            saveStickers(
+                              stickers.filter((item) => item.id !== s.id)
+                            );
+                          }}
+                        >
+                          🗑 Hapus
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -912,7 +1010,9 @@ const styles = {
   },
   tabBtn: {
     padding: "10px 18px",
-    border: "none",
+    borderTop: "none",
+    borderLeft: "none",
+    borderBottom: "3px solid transparent",
     borderRight: "1px solid #D9D2C2",
     background: "transparent",
     fontFamily: "inherit",
@@ -1369,5 +1469,36 @@ const styles = {
   muted: {
     fontSize: 12,
     color: "#8A8073",
+  },
+  stickerGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+    gap: 12,
+  },
+  stickerCard: {
+    background: "#fff",
+    border: "1.5px solid #1E1A16",
+    borderRadius: 10,
+    padding: 12,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  stickerThumbBox: {
+    width: "100%",
+    height: 100,
+    borderRadius: 6,
+    border: "1px solid #DDD6C8",
+    background:
+      "repeating-conic-gradient(#EDE7D9 0% 25%, #FFFDF8 0% 50%) 50% / 16px 16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8,
+  },
+  stickerThumbImg: {
+    maxWidth: "100%",
+    maxHeight: "100%",
+    objectFit: "contain",
   },
 };

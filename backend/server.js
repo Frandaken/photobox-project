@@ -2,8 +2,7 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import {
-  uploadToSmb,
-  checkSmbConnection,
+  uploadPhoto,
   checkNextcloudConnection,
   getSessionPaths,
 } from "./smbUpload.js";
@@ -12,6 +11,8 @@ import {
   saveLayouts,
   getBackgrounds,
   saveBackgrounds,
+  getStickers,
+  saveStickers,
 } from "./dataStore.js";
 import { verifyPin, requireAdminAuth } from "./adminAuth.js";
 
@@ -48,7 +49,7 @@ app.post("/api/upload", async (req, res) => {
 
   try {
     // Unggah foto hasil (frame gabungan) dan buat link share publik view-only dari Nextcloud
-    const finalUploadResult = await uploadToSmb(
+    const finalUploadResult = await uploadPhoto(
       dataUrlToBuffer(finalImage),
       sessionInfo.finalRelativePath,
       true,
@@ -59,7 +60,7 @@ app.post("/api/upload", async (req, res) => {
     if (originalPhotos.length > 0) {
       Promise.all(
         originalPhotos.map((photo, i) =>
-          uploadToSmb(
+          uploadPhoto(
             dataUrlToBuffer(photo),
             sessionInfo.getOriginalRelativePath(i + 1),
             false
@@ -101,6 +102,14 @@ app.get("/api/backgrounds", async (_req, res) => {
   }
 });
 
+app.get("/api/stickers", async (_req, res) => {
+  try {
+    res.json(await getStickers());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 // ============================================================
@@ -117,7 +126,6 @@ app.post("/api/admin/login", (req, res) => {
 });
 
 app.get("/api/admin/status", requireAdminAuth, async (_req, res) => {
-  const smbResult = await checkSmbConnection();
   const nextcloudResult = await checkNextcloudConnection();
 
   res.json({
@@ -125,7 +133,6 @@ app.get("/api/admin/status", requireAdminAuth, async (_req, res) => {
       active: true,
       directory: process.env.DATA_DIR || path.join(process.cwd(), "data"),
     },
-    smb: smbResult,
     nextcloud: nextcloudResult,
   });
 });
@@ -145,6 +152,15 @@ app.put("/api/admin/backgrounds", requireAdminAuth, async (req, res) => {
     return res.status(400).json({ error: "Body harus berupa array background" });
   }
   await saveBackgrounds(backgrounds);
+  res.json({ saved: true });
+});
+
+app.put("/api/admin/stickers", requireAdminAuth, async (req, res) => {
+  const stickers = req.body;
+  if (!Array.isArray(stickers)) {
+    return res.status(400).json({ error: "Body harus berupa array stiker" });
+  }
+  await saveStickers(stickers);
   res.json({ saved: true });
 });
 

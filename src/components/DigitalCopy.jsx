@@ -225,13 +225,9 @@ export default function DigitalCopy({
           <div style={styles.successBox}>
             <p style={styles.successText}>
               ✓ <b>Tersimpan aman!</b>{" "}
-              {storageResult?.smb && storageResult?.nextcloud
-                ? "Tersimpan otomatis ke NAS (SMB) & Nextcloud."
-                : storageResult?.nextcloud
-                ? "Tersimpan otomatis ke Nextcloud."
-                : storageResult?.smb
-                ? "Tersimpan otomatis ke NAS (SMB)."
-                : "Tersimpan ke folder data server."}
+              {storageResult?.nextcloud
+                ? "Tersimpan otomatis ke Nextcloud Cloud Storage."
+                : "Tersimpan aman ke penyimpanan lokal server."}
             </p>
             <div style={styles.downloadRow}>
               <button
