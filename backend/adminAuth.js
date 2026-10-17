@@ -12,17 +12,23 @@ export function verifyPin(inputPin) {
   const envPin = (process.env.ADMIN_PIN || "").trim();
   const input = String(inputPin || "").trim();
 
-  // Cocok dengan env ADMIN_PIN, atau fallback default pin 1234 / 123456
-  const isMatch =
-    (envPin && input === envPin) ||
-    input === "1234" ||
-    input === "123456";
+  if (!input) return null;
+
+  // Jika ADMIN_PIN diatur di env, HANYA PIN tersebut yang diizinkan (blokir 1234 / 123456 dan lainnya)
+  let isMatch = false;
+  if (envPin) {
+    isMatch = input === envPin;
+  } else {
+    // Hanya jika variabel ADMIN_PIN tidak diatur di env sama sekali, gunakan fallback 1234
+    isMatch = input === "1234";
+  }
 
   if (!isMatch) return null;
 
   const token = crypto.randomBytes(24).toString("hex");
   activeTokens.add(token);
-  setTimeout(() => activeTokens.delete(token), TOKEN_TTL_MS);
+  const timer = setTimeout(() => activeTokens.delete(token), TOKEN_TTL_MS);
+  if (timer.unref) timer.unref();
   return token;
 }
 

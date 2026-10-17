@@ -1,6 +1,6 @@
 {
   "name": "Photobox",
-  "description": "Photobox — foto instan, pilih frame favoritmu",
+  "description": "Photobox — Bilik Foto Instan & Salinan Digital",
   "capabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

@@ -8,7 +8,8 @@ import StickerOverlay from "./components/StickerOverlay.jsx";
 import DigitalCopy from "./components/DigitalCopy.jsx";
 import Done from "./components/Done.jsx";
 import AdminLockButton from "./components/AdminLockButton.jsx";
-import AdminPanel from "./components/AdminPanel.jsx";
+
+const AdminPanel = React.lazy(() => import("./components/AdminPanel.jsx"));
 
 /**
  * App
@@ -186,7 +187,28 @@ export default function App() {
       {renderScreen()}
 
       {adminToken ? (
-        <AdminPanel token={adminToken} onClose={() => setAdminToken(null)} />
+        <React.Suspense
+          fallback={
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(30, 26, 22, 0.85)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#FFFDF8",
+                fontFamily: "Georgia, serif",
+                fontSize: 16,
+                zIndex: 9999,
+              }}
+            >
+              Memuat Admin Panel…
+            </div>
+          }
+        >
+          <AdminPanel token={adminToken} onClose={() => setAdminToken(null)} />
+        </React.Suspense>
       ) : (
         <AdminLockButton onUnlock={setAdminToken} />
       )}

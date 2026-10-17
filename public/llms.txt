@@ -1,0 +1,32 @@
+# Photobox (Bilik Foto Instan & Digital)
+
+> Aplikasi web bilik foto (photobox) interaktif mandiri untuk event, pesta, kios, dan dokumentasi momen dengan cetak strip instan, stiker lucu, dan unduhan salinan digital otomatis.
+
+## Overview
+- Nama: Photobox
+- Bahasa: Bahasa Indonesia (id)
+- Tipe: Single Page Application (React + Vite + Express + Node.js)
+- Platform: Web, Tablet, Kiosk, Desktop
+
+## Alur Pengguna (User Flow)
+1. Layar Siaga (Idle Screen): Ketuk layar untuk memulai sesi foto.
+2. Pemilihan Frame (Layout Picker): Pilih format strip foto (Strip 3 foto, Grid 4 foto, Solo klasik, Duo samping).
+3. Pemilihan Tema & Background: Pilih palet warna dan suasana latar belakang foto.
+4. Sesi Jepret (Photo Session): Countdown timer, shutter otomatis, flash kamera, dan preview jepretan.
+5. Seleksi Jepretan Terbaik (Select Best): Pilih pose terbaik untuk masing-masing slot frame.
+6. Dekorasi Stiker (Sticker Overlay): Letakkan stiker lucu dengan fitur drag, resize, rotate, dan pinch-to-zoom.
+7. Salinan Digital & Cetak (Digital Copy & Print): Render hasil komposit high-resolution, unduh file JPEG, scan QR Code untuk akses link Nextcloud, atau cetak fisik.
+
+## Fitur Unggulan
+- Admin Panel: Pengaturan PIN, kustomisasi layout slot piksel kanvas, tema background, dan upload stiker PNG kustom.
+- Dual Storage Architecture: Upload otomatis ke Nextcloud WebDAV publik view-only share link dengan fallback fail-safe ke volume lokal NAS pool.
+- Format Folder Berhierarki: `PHOTOBOX/YYYY/MM/DDMMYY/SESI DDMMYY HHMMSS/`
+
+## API Endpoints
+- GET `/api/health`: Status ketersediaan backend.
+- GET `/api/layouts`: Daftar konfigurasi layout frame dan slot koordinat.
+- GET `/api/backgrounds`: Daftar tema warna latar belakang.
+- GET `/api/stickers`: Daftar stiker dekorasi.
+- POST `/api/upload`: Menyimpan hasil cetak komposit dan foto-foto asli sesi.
+- POST `/api/admin/login`: Verifikasi PIN admin dan penerbitan bearer token sesi.
+- POST `/api/admin/reset-defaults`: Memulihkan template bawaan (frame, background, stiker).

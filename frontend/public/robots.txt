@@ -1,0 +1,46 @@
+# robots.txt for Photobox
+
+# Disallow AI scrapers and training bots
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Anthropic-ai
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+# Allow general search engine crawlers
+User-agent: *
+Allow: /
+Disallow: /api/admin/
+Disallow: /api/upload
+
+Sitemap: https://ais-pre-gnn2kd3qa6fqkrkqmw6k64-28906603340.asia-southeast1.run.app/sitemap.xml
