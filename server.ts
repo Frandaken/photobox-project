@@ -13,6 +13,7 @@ import {
   saveBackgrounds,
   getStickers,
   saveStickers,
+  resetDefaults,
 } from "./backend/dataStore.js";
 import { verifyPin, requireAdminAuth } from "./backend/adminAuth.js";
 
@@ -155,6 +156,17 @@ async function startServer() {
     await saveStickers(stickers);
     res.json({ saved: true });
   });
+
+  app.post("/api/admin/reset-defaults", requireAdminAuth, async (req, res) => {
+    const { type = "all" } = req.body || {};
+    const result = await resetDefaults(type);
+    res.json({ reset: true, ...result });
+  });
+
+  // Sajikan file foto volume storage secara statis jika dibutuhkan
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
+  app.use("/uploads", express.static(dataDir));
+  app.use("/uploads", express.static(path.join(dataDir, "uploads")));
 
   // ============================================================
   // Vite Integration / Static Assets

@@ -123,40 +123,42 @@ export default function StickerOverlay({
           </p>
         </div>
 
-        {/* Canvas Wrapper */}
-        <div
-          ref={containerRef}
-          style={{
-            ...styles.canvasWrap,
-            aspectRatio: `${layout.canvasWidth} / ${layout.canvasHeight}`,
-          }}
-          onPointerDown={(e) => {
-            // Tap area kosong kanvas untuk unselect
-            if (e.target === containerRef.current || e.target === baseCanvasRef.current) {
-              setSelectedUid(null);
-            }
-          }}
-        >
-          <canvas ref={baseCanvasRef} style={styles.baseCanvas} />
-          {!baseReady && <div style={styles.loadingHint}>Menyusun frame…</div>}
+        {/* Canvas Wrapper dengan centering presisi tanpa pillarbox */}
+        <div style={styles.canvasOuterCenter}>
+          <div
+            ref={containerRef}
+            style={{
+              ...styles.canvasWrap,
+              aspectRatio: `${layout.canvasWidth} / ${layout.canvasHeight}`,
+            }}
+            onPointerDown={(e) => {
+              // Tap area kosong kanvas untuk unselect
+              if (e.target === containerRef.current || e.target === baseCanvasRef.current) {
+                setSelectedUid(null);
+              }
+            }}
+          >
+            <canvas ref={baseCanvasRef} style={styles.baseCanvas} />
+            {!baseReady && <div style={styles.loadingHint}>Menyusun frame…</div>}
 
-          {baseReady &&
-            placedStickers.map((s) => (
-              <DraggableSticker
-                key={s.uid}
-                sticker={s}
-                containerRef={containerRef}
-                canvasWidth={layout.canvasWidth}
-                canvasHeight={layout.canvasHeight}
-                selected={selectedUid === s.uid}
-                onSelect={() => setSelectedUid(s.uid)}
-                onChange={(next) =>
-                  setPlacedStickers((prev) =>
-                    prev.map((p) => (p.uid === s.uid ? { ...p, ...next } : p))
-                  )
-                }
-              />
-            ))}
+            {baseReady &&
+              placedStickers.map((s) => (
+                <DraggableSticker
+                  key={s.uid}
+                  sticker={s}
+                  containerRef={containerRef}
+                  canvasWidth={layout.canvasWidth}
+                  canvasHeight={layout.canvasHeight}
+                  selected={selectedUid === s.uid}
+                  onSelect={() => setSelectedUid(s.uid)}
+                  onChange={(next) =>
+                    setPlacedStickers((prev) =>
+                      prev.map((p) => (p.uid === s.uid ? { ...p, ...next } : p))
+                    )
+                  }
+                />
+              ))}
+          </div>
         </div>
 
         {/* Floating Quick Controls saat ada stiker terpilih */}
@@ -526,26 +528,33 @@ const styles = {
     margin: 0,
     lineHeight: 1.4,
   },
+  canvasOuterCenter: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+    margin: "6px 0 10px",
+  },
   canvasWrap: {
     position: "relative",
-    width: "100%",
+    width: "auto",
+    height: "auto",
+    maxWidth: "100%",
     maxHeight: "48vh",
     background: "#EDE7D9",
     border: "2px solid #1E1A16",
     borderRadius: 12,
     overflow: "hidden",
-    margin: "8px 0 10px",
     touchAction: "none",
     boxShadow: "0 6px 18px rgba(0,0,0,0.1)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    lineHeight: 0,
   },
   baseCanvas: {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
     display: "block",
+    maxWidth: "100%",
+    maxHeight: "48vh",
+    width: "auto",
+    height: "auto",
   },
   loadingHint: {
     position: "absolute",

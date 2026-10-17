@@ -6,7 +6,7 @@ services:
       no_cache: true
     container_name: app-frontend
     ports:
-      - 80:80
+      - "8010:80"
     restart: unless-stopped
     depends_on:
       - backend
@@ -22,12 +22,16 @@ services:
       no_cache: true
     container_name: app-backend
     ports:
-      - 3000:3000
+      - "5795:5795"
+    env_file:
+      - .env
     environment:
-      - PORT=3000
+      - PORT=5795
       - NODE_ENV=production
+      - DATA_DIR=/app/data
     volumes:
-      - ./data:/app/data
+      # Ubah sisi kiri sesuai path penyimpanan NAS/lokal Anda:
+      - /mnt/nas-pool/Share/PHOTOBOX:/app/data
     restart: unless-stopped
     networks:
       app-network:

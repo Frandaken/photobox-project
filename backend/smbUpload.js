@@ -77,13 +77,28 @@ export function resolveFullPath(baseFolder, relativePath) {
 }
 
 /**
- * Simpan ke direktori lokal (selalu dieksekusi sebagai fail-safe utama)
+ * Simpan ke direktori volume storage fail-safe.
+ * Mengikuti formatting folder hierarki yang sama persis dengan spesifikasi Nextcloud:
+ * [DATA_DIR]/YYYY/MM/DDMMYY/SESI DDMMYY HHMMSS/
+ * ├── SESI DDMMYY HHMMSS.jpg
+ * ├── SESI DDMMYY HHMMSS - Original 1.jpg
+ * └── SESI DDMMYY HHMMSS - Original 2.jpg
  */
 async function saveToLocalDisk(buffer, remoteFilePath) {
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
-  const targetPath = path.join(dataDir, "uploads", remoteFilePath);
+  let cleanRel = (remoteFilePath || "").replace(/^\/+/, "");
+
+  // Jika remoteFilePath diawali dengan "PHOTOBOX/", hilangkan prefix PHOTOBOX/
+  // karena volume mount di NAS sudah diarahkan ke folder /mnt/nas-pool/Share/PHOTOBOX
+  // sehingga strukturnya langsung rapi: YYYY/MM/DDMMYY/SESI DDMMYY HHMMSS/
+  if (cleanRel.toUpperCase().startsWith("PHOTOBOX/")) {
+    cleanRel = cleanRel.substring("PHOTOBOX/".length);
+  }
+
+  const targetPath = path.join(path.resolve(dataDir), cleanRel);
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
   await fs.writeFile(targetPath, buffer);
+  console.log(`[Volume Storage] Foto tersimpan di: ${targetPath}`);
   return targetPath;
 }
 
@@ -208,7 +223,9 @@ export async function uploadToNextcloud(buffer, remoteFilePath, createShare = fa
   });
 
   if (!res.ok && res.status !== 201 && res.status !== 204) {
-    throw new Error(`Nextcloud WebDAV status ${res.status}: ${res.statusText}`);
+    const errorBody = await res.text().catch(() => "");
+    console.error(`[Nextcloud WebDAV Error] status=${res.status} url=${putUrl} response=${errorBody.slice(0, 250)}`);
+    throw new Error(`Nextcloud WebDAV status ${res.status}: ${res.statusText || errorBody.slice(0, 100)}`);
   }
 
   let shareUrl = null;

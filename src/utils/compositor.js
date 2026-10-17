@@ -190,7 +190,7 @@ export async function drawStickers(canvas, stickers = []) {
     if (!img) return;
 
     // Hitung ukuran proporsional persis sama dengan yang ditampilkan di StickerOverlay
-    const baseW = sticker.width || 200;
+    const baseW = sticker.width || Math.round((canvas.width || 1200) * 0.22);
     const baseH =
       sticker.height ||
       (img.naturalHeight && img.naturalWidth

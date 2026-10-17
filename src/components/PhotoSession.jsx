@@ -71,22 +71,66 @@ export default function PhotoSession({ requiredShots = 3, onFinish, onBack }) {
       setReady(false);
       stopCurrentStream();
 
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const isHttpInsecure =
+        typeof window !== "undefined" &&
+        !window.isSecureContext &&
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1";
+
+      if (isHttpInsecure || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setError(
-          "Fitur kamera tidak didukung atau dibatasi pada browser/konteks saat ini."
+          isHttpInsecure
+            ? `Browser memblokir izin kamera karena situs diakses lewat protokol HTTP IP (${window.location.origin}). Browser mewajibkan HTTPS atau Localhost.`
+            : "Fitur kamera tidak didukung atau dibatasi pada browser/konteks saat ini."
         );
         return;
       }
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: mode,
-            width: { ideal: 1280 },
-            height: { ideal: 960 },
+        // Coba dapatkan stream kamera dengan fallback bertingkat:
+        // Tier 1: HD + facingMode
+        // Tier 2: Tanpa facingMode (wajib untuk USB webcam & capture card DSLR di PC)
+        // Tier 3: Constraint video dasar (paling kompatibel)
+        const attempts = [
+          {
+            video: {
+              facingMode: mode,
+              width: { ideal: 1280 },
+              height: { ideal: 960 },
+            },
+            audio: false,
           },
-          audio: false,
-        });
+          {
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 960 },
+            },
+            audio: false,
+          },
+          { video: true, audio: false },
+        ];
+
+        let stream = null;
+        let lastErr = null;
+
+        for (const constraint of attempts) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(constraint);
+            if (stream) break;
+          } catch (attemptErr) {
+            lastErr = attemptErr;
+            if (
+              attemptErr?.name === "NotAllowedError" ||
+              attemptErr?.name === "SecurityError"
+            ) {
+              break;
+            }
+          }
+        }
+
+        if (!stream) {
+          throw lastErr || new Error("Gagal memulai stream kamera");
+        }
 
         streamRef.current = stream;
 
@@ -116,11 +160,29 @@ export default function PhotoSession({ requiredShots = 3, onFinish, onBack }) {
 
         if (isNotAllowed) {
           setError(
-            "Akses kamera tidak diizinkan oleh browser atau dibatasi oleh izin iframe."
+            isHttpInsecure
+              ? `Browser memblokir izin kamera karena diakses via HTTP IP (${window.location.origin}). Browser mewajibkan HTTPS atau Localhost.`
+              : "Akses kamera belum diizinkan. Silakan klik ikon gembok / kamera di address bar browser untuk memberi izin kamera."
+          );
+        } else if (
+          err?.name === "NotFoundError" ||
+          err?.name === "DevicesNotFoundError"
+        ) {
+          setError(
+            "Perangkat kamera tidak ditemukan. Pastikan webcam atau kamera USB sudah terhubung ke PC."
+          );
+        } else if (
+          err?.name === "NotReadableError" ||
+          err?.name === "TrackStartError"
+        ) {
+          setError(
+            "Kamera sedang dipakai aplikasi lain (seperti OBS, Zoom, atau tab browser lain). Tutup aplikasi tersebut lalu coba lagi."
           );
         } else {
           setError(
-            `Kamera tidak tersedia (${err?.message || "Periksa izin perangkat"}).`
+            `Kamera tidak dapat dibuka (${err?.name || "Error"}: ${
+              err?.message || "Periksa izin perangkat"
+            }).`
           );
         }
       }
@@ -360,6 +422,26 @@ export default function PhotoSession({ requiredShots = 3, onFinish, onBack }) {
               <div style={styles.fallbackIcon}>📷</div>
               <h3 style={styles.fallbackTitle}>Akses Kamera Terkendala</h3>
               <p style={styles.fallbackDesc}>{error}</p>
+
+              {typeof window !== "undefined" &&
+                !window.isSecureContext &&
+                window.location.hostname !== "localhost" &&
+                window.location.hostname !== "127.0.0.1" && (
+                  <div style={styles.httpHintBox}>
+                    <div style={{ fontWeight: "bold", marginBottom: 6, color: "#D8482E", fontSize: 12 }}>
+                      💡 Cara Mengaktifkan Kamera di Chrome / Edge Kios (Jaringan Lokal):
+                    </div>
+                    <div style={{ fontSize: 11, color: "#5A5245", lineHeight: 1.5, textAlign: "left" }}>
+                      1. Buka tab baru di browser kios, ketik:
+                      <div style={{ margin: "4px 0", background: "#EDE7D9", padding: "4px 8px", borderRadius: 4, fontFamily: "monospace", fontSize: 10, wordBreak: "break-all" }}>
+                        chrome://flags/#unsafely-treat-insecure-origin-as-secure
+                      </div>
+                      2. Ubah dropdown menjadi <b>Enabled</b>.<br />
+                      3. Masukkan alamat IP kios ini: <b>{window.location.origin}</b><br />
+                      4. Klik tombol <b>Relaunch</b> di pojok bawah. Kamera akan langsung diizinkan!
+                    </div>
+                  </div>
+                )}
 
               <div style={styles.fallbackActions}>
                 <button
@@ -786,9 +868,19 @@ const styles = {
   fallbackDesc: {
     fontSize: 11,
     color: "#C9C2B4",
-    margin: "0 0 14px",
+    margin: "0 0 12px",
     lineHeight: 1.4,
-    maxWidth: 340,
+    maxWidth: 360,
+  },
+  httpHintBox: {
+    background: "#2E2823",
+    border: "1.5px solid #E3A63E",
+    borderRadius: 8,
+    padding: "10px 12px",
+    margin: "0 0 14px",
+    maxWidth: 380,
+    width: "100%",
+    boxSizing: "border-box",
   },
   fallbackActions: {
     display: "flex",

@@ -55,11 +55,16 @@ export default function AdminPanel({ token, onClose }) {
       const layoutsData = await layoutsRes.json();
       const bgData = await bgRes.json();
       const stickersData = await stickersRes.json();
-      setLayouts(layoutsData);
-      setBackgrounds(bgData);
-      setStickers(Array.isArray(stickersData) ? stickersData : []);
-      if (layoutsData.length > 0 && !selectedLayoutId) {
-        setSelectedLayoutId(layoutsData[0].id);
+
+      const safeLayouts = Array.isArray(layoutsData) ? layoutsData : [];
+      const safeBgs = Array.isArray(bgData) ? bgData : [];
+      const safeStickers = Array.isArray(stickersData) ? stickersData : [];
+
+      setLayouts(safeLayouts);
+      setBackgrounds(safeBgs);
+      setStickers(safeStickers);
+      if (safeLayouts.length > 0 && !selectedLayoutId) {
+        setSelectedLayoutId(safeLayouts[0].id);
       }
     } catch (err) {
       console.error("Gagal memuat data:", err);
@@ -150,6 +155,39 @@ export default function AdminPanel({ token, onClose }) {
     };
     reader.readAsDataURL(file);
     e.target.value = "";
+  };
+
+  const handleResetDefaults = async (type = "all") => {
+    const label =
+      type === "layouts"
+        ? "frame & layout"
+        : type === "backgrounds"
+        ? "background tema"
+        : type === "stickers"
+        ? "koleksi stiker"
+        : "semua template";
+
+    if (!window.confirm(`Pulihkan ${label} bawaan sistem? Template bawaan akan otomatis dimuat ulang.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/reset-defaults", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ type }),
+      });
+      const data = await res.json();
+      if (data.layouts) {
+        setLayouts(data.layouts);
+        if (data.layouts.length > 0) setSelectedLayoutId(data.layouts[0].id);
+      }
+      if (data.backgrounds) setBackgrounds(data.backgrounds);
+      if (data.stickers) setStickers(data.stickers);
+      flashSaved("Template bawaan berhasil dipulihkan ✓");
+    } catch {
+      flashSaved("Gagal memulihkan template");
+    }
   };
 
   // --- Handlers Layout ---
@@ -403,9 +441,18 @@ export default function AdminPanel({ token, onClose }) {
                       </button>
                     ))}
                   </div>
-                  <button style={styles.addFrameBtn} onClick={addLayout}>
-                    + Buat Frame Baru
-                  </button>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <button style={styles.addFrameBtn} onClick={addLayout}>
+                      + Buat Frame Baru
+                    </button>
+                    <button
+                      style={styles.resetOutlineBtn}
+                      onClick={() => handleResetDefaults("layouts")}
+                      title="Pulihkan seluruh layout & frame bawaan sistem"
+                    >
+                      ↺ Pulihkan Frame Bawaan
+                    </button>
+                  </div>
                 </div>
 
                 {activeLayout && (
@@ -743,19 +790,28 @@ export default function AdminPanel({ token, onClose }) {
               <div style={styles.bgTabWrap}>
                 <div style={styles.sectionHeaderRow}>
                   <h2 style={styles.sectionTitle}>Tema Background</h2>
-                  <button
-                    style={styles.addBtn}
-                    onClick={() => {
-                      const newBg = {
-                        id: `bg-${Date.now()}`,
-                        name: "Warna Baru",
-                        thumbColor: "#F3C9BE",
-                      };
-                      saveBackgrounds([...backgrounds, newBg]);
-                    }}
-                  >
-                    + Tambah Background
-                  </button>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <button
+                      style={styles.addBtn}
+                      onClick={() => {
+                        const newBg = {
+                          id: `bg-${Date.now()}`,
+                          name: "Warna Baru",
+                          thumbColor: "#F3C9BE",
+                        };
+                        saveBackgrounds([...backgrounds, newBg]);
+                      }}
+                    >
+                      + Tambah Background
+                    </button>
+                    <button
+                      style={styles.resetOutlineBtn}
+                      onClick={() => handleResetDefaults("backgrounds")}
+                      title="Pulihkan seluruh background bawaan sistem"
+                    >
+                      ↺ Pulihkan Background Bawaan
+                    </button>
+                  </div>
                 </div>
 
                 <div style={styles.bgGrid}>
@@ -827,15 +883,24 @@ export default function AdminPanel({ token, onClose }) {
                       Unggah stiker PNG transparan untuk didekorasikan oleh pengguna di bilik foto.
                     </p>
                   </div>
-                  <label style={styles.addBtn} className="btn-interactive">
-                    + Unggah Stiker PNG
-                    <input
-                      type="file"
-                      accept="image/png,image/webp,image/svg+xml"
-                      style={{ display: "none" }}
-                      onChange={handleUploadSticker}
-                    />
-                  </label>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <label style={styles.addBtn} className="btn-interactive">
+                      + Unggah Stiker PNG
+                      <input
+                        type="file"
+                        accept="image/png,image/webp,image/svg+xml"
+                        style={{ display: "none" }}
+                        onChange={handleUploadSticker}
+                      />
+                    </label>
+                    <button
+                      style={styles.resetOutlineBtn}
+                      onClick={() => handleResetDefaults("stickers")}
+                      title="Pulihkan seluruh stiker bawaan sistem"
+                    >
+                      ↺ Pulihkan Stiker Bawaan
+                    </button>
+                  </div>
                 </div>
 
                 <div style={styles.stickerGrid}>
@@ -1421,6 +1486,17 @@ const styles = {
     background: "#D8482E",
     color: "#fff",
     border: "none",
+    borderRadius: 8,
+    padding: "6px 12px",
+    fontFamily: "inherit",
+    fontSize: 11,
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  resetOutlineBtn: {
+    background: "transparent",
+    border: "1.5px solid #1E1A16",
+    color: "#1E1A16",
     borderRadius: 8,
     padding: "6px 12px",
     fontFamily: "inherit",

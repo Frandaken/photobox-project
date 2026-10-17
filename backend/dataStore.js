@@ -219,20 +219,28 @@ export const DEFAULT_STICKERS = [
 ];
 
 async function ensureDataDir() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.mkdir(DATA_DIR, { recursive: true }).catch(() => {});
 }
 
 async function readJsonOrDefault(filePath, defaultValue) {
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content);
-  } catch (err) {
-    if (err.code === "ENOENT") {
-      await ensureDataDir();
-      await fs.writeFile(filePath, JSON.stringify(defaultValue, null, 2));
+    const trimmed = content?.trim();
+    if (!trimmed) {
+      await writeJson(filePath, defaultValue).catch(() => {});
       return defaultValue;
     }
-    throw err;
+    const parsed = JSON.parse(trimmed);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      // Jika file hanya berisi [] atau invalid, pulihkan default template
+      await writeJson(filePath, defaultValue).catch(() => {});
+      return defaultValue;
+    }
+    return parsed;
+  } catch (err) {
+    console.warn(`[DataStore] Menggunakan default untuk ${path.basename(filePath)}:`, err.message);
+    await writeJson(filePath, defaultValue).catch(() => {});
+    return defaultValue;
   }
 }
 
@@ -266,4 +274,21 @@ export async function getStickers() {
 export async function saveStickers(stickers) {
   await writeJson(STICKERS_FILE, stickers);
   return stickers;
+}
+
+export async function resetDefaults(type = "all") {
+  if (type === "all" || type === "layouts") {
+    await writeJson(LAYOUTS_FILE, DEFAULT_LAYOUTS);
+  }
+  if (type === "all" || type === "backgrounds") {
+    await writeJson(BACKGROUNDS_FILE, DEFAULT_BACKGROUNDS);
+  }
+  if (type === "all" || type === "stickers") {
+    await writeJson(STICKERS_FILE, DEFAULT_STICKERS);
+  }
+  return {
+    layouts: DEFAULT_LAYOUTS,
+    backgrounds: DEFAULT_BACKGROUNDS,
+    stickers: DEFAULT_STICKERS,
+  };
 }
